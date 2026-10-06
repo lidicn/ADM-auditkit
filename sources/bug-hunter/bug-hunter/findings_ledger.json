@@ -1,0 +1,597 @@
+{
+  "rounds": [
+    {
+      "name": "R8",
+      "ts": "2026-10-04 12:32",
+      "mode": "fast",
+      "new": 48,
+      "known": 0,
+      "resolved": 0
+    },
+    {
+      "name": "R9",
+      "ts": "2026-10-04 16:15",
+      "mode": "fast",
+      "new": 15,
+      "known": 42,
+      "resolved": 6
+    },
+    {
+      "name": "R9",
+      "ts": "2026-10-04 16:15",
+      "mode": "fast",
+      "new": 0,
+      "known": 57,
+      "resolved": 0
+    }
+  ],
+  "items": {
+    "06c9512143": {
+      "fp": "06c9512143",
+      "title": "except 直接 pass",
+      "loc": "butler/app.py:786",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "2e82c1c042": {
+      "fp": "2e82c1c042",
+      "title": "except 直接 pass",
+      "loc": "butler/app.py:790",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "a2f52f8376": {
+      "fp": "a2f52f8376",
+      "title": "except 直接 pass",
+      "loc": "butler/app.py:108",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "1267ed23db": {
+      "fp": "1267ed23db",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:550",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "214522447d": {
+      "fp": "214522447d",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:554",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "2d272056fa": {
+      "fp": "2d272056fa",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:592",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "595a75981d": {
+      "fp": "595a75981d",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:596",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "0147a5bad7": {
+      "fp": "0147a5bad7",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:613",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "bf7a4b8e5f": {
+      "fp": "bf7a4b8e5f",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:617",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "0e4988cd83": {
+      "fp": "0e4988cd83",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:623",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "8a02e826f6": {
+      "fp": "8a02e826f6",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:629",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "7dfd0b06bc": {
+      "fp": "7dfd0b06bc",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:635",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "7813c0cedc": {
+      "fp": "7813c0cedc",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:641",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "dca24c4d47": {
+      "fp": "dca24c4d47",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:657",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "e2d283a17c": {
+      "fp": "e2d283a17c",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:665",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "ead12257b4": {
+      "fp": "ead12257b4",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/app.py:559",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R8",
+      "last": "R9"
+    },
+    "9159462aec": {
+      "fp": "9159462aec",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:229",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "8c22f4c29e": {
+      "fp": "8c22f4c29e",
+      "title": "except 直接 pass",
+      "loc": "butler/core/dialog.py:322",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "39ec48ef07": {
+      "fp": "39ec48ef07",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:449",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "fa29a0f5dd": {
+      "fp": "fa29a0f5dd",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:505",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "fadc59cf8e": {
+      "fp": "fadc59cf8e",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:729",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "7ebc374026": {
+      "fp": "7ebc374026",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:376",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "9e9572694f": {
+      "fp": "9e9572694f",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:411",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "b100781f3d": {
+      "fp": "b100781f3d",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:342",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "95f1d94032": {
+      "fp": "95f1d94032",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:354",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "9b21e6dfa0": {
+      "fp": "9b21e6dfa0",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/dialog.py:391",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "69ac79e258": {
+      "fp": "69ac79e258",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/runner.py:261",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "9ab90a5273": {
+      "fp": "9ab90a5273",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/runner.py:119",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "7a77bf184a": {
+      "fp": "7a77bf184a",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/skills/runner.py:452",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "51c7eaf2aa": {
+      "fp": "51c7eaf2aa",
+      "title": "except 直接 pass",
+      "loc": "butler/core/xiaomi_ear.py:174",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "10ce6aa2aa": {
+      "fp": "10ce6aa2aa",
+      "title": "except 直接 pass",
+      "loc": "butler/decision/aggregator.py:189",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "23a87b2d43": {
+      "fp": "23a87b2d43",
+      "title": "except 直接 pass",
+      "loc": "butler/decision/aggregator.py:280",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "db3f2ded16": {
+      "fp": "db3f2ded16",
+      "title": "except 直接 pass",
+      "loc": "butler/decision/aggregator.py:167",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "1968265aad": {
+      "fp": "1968265aad",
+      "title": "except 直接 pass",
+      "loc": "butler/tools/desk_pilot.py:118",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "e0e5cd6bae": {
+      "fp": "e0e5cd6bae",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/triggers/health_api.py:124",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R8",
+      "last": "R9"
+    },
+    "0ced560795": {
+      "fp": "0ced560795",
+      "title": "except 直接 pass",
+      "loc": "butler/api/doubao_webhook.py:438",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "51ec33a10d": {
+      "fp": "51ec33a10d",
+      "title": "except 直接 pass",
+      "loc": "butler/api/doubao_webhook.py:422",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "e9e149ab23": {
+      "fp": "e9e149ab23",
+      "title": "except 直接 pass",
+      "loc": "butler/api/doubao_webhook.py:427",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "16736dd5e3": {
+      "fp": "16736dd5e3",
+      "title": "except 直接 pass",
+      "loc": "butler/api/doubao_webhook.py:738",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "6764181966": {
+      "fp": "6764181966",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ha.py:161",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R8"
+    },
+    "d69cbecec2": {
+      "fp": "d69cbecec2",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ha.py:575",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R8"
+    },
+    "ad2e0a329d": {
+      "fp": "ad2e0a329d",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ha.py:619",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R8"
+    },
+    "02815ef3a8": {
+      "fp": "02815ef3a8",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ha.py:629",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R8"
+    },
+    "98b7fe7272": {
+      "fp": "98b7fe7272",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ha.py:644",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R8"
+    },
+    "2b2aa29072": {
+      "fp": "2b2aa29072",
+      "title": "except 直接 pass",
+      "loc": "butler/triggers/engine.py:116",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R8"
+    },
+    "a19e95b4e9": {
+      "fp": "a19e95b4e9",
+      "title": "except 直接 pass",
+      "loc": "butler/audiobook/manager.py:322",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "8f746b5302": {
+      "fp": "8f746b5302",
+      "title": "except 直接 pass",
+      "loc": "butler/audiobook/manager.py:402",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "24f12c7d90": {
+      "fp": "24f12c7d90",
+      "title": "except 直接 pass",
+      "loc": "butler/audiobook/manager.py:389",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R8",
+      "last": "R9"
+    },
+    "9300b7455d": {
+      "fp": "9300b7455d",
+      "title": "except 直接 pass",
+      "loc": "butler/proactive/api.py:158",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "3104a66923": {
+      "fp": "3104a66923",
+      "title": "except 直接 pass",
+      "loc": "butler/core/cron_task.py:558",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "cabb76a2b6": {
+      "fp": "cabb76a2b6",
+      "title": "协程 Future 未取结果（V13）",
+      "loc": "butler/core/cron_task.py:676",
+      "stage": "fast-core",
+      "severity": "P1",
+      "first": "R9",
+      "last": "R9"
+    },
+    "8bb16e9344": {
+      "fp": "8bb16e9344",
+      "title": "create_task 引用未保存（V6）",
+      "loc": "butler/core/cron_task.py:594",
+      "stage": "fast-core",
+      "severity": "P2",
+      "first": "R9",
+      "last": "R9"
+    },
+    "3c6a5b2783": {
+      "fp": "3c6a5b2783",
+      "title": "except 直接 pass",
+      "loc": "butler/morning/routine.py:152",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "e069dd72c0": {
+      "fp": "e069dd72c0",
+      "title": "except 直接 pass",
+      "loc": "butler/morning/routine.py:157",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "3b2209c379": {
+      "fp": "3b2209c379",
+      "title": "except 直接 pass",
+      "loc": "butler/locator.py:54",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "07fc564864": {
+      "fp": "07fc564864",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ilink/bridge.py:124",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "fb8acd03e1": {
+      "fp": "fb8acd03e1",
+      "title": "except 直接 pass",
+      "loc": "butler/integrations/ilink/bridge.py:209",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "5f0a9f9c5e": {
+      "fp": "5f0a9f9c5e",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/engines/ha_inspection/engine.py:121",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "75688009ec": {
+      "fp": "75688009ec",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/versions.py:75",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "de8ef10e65": {
+      "fp": "de8ef10e65",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/versions.py:165",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "9aa7d5c6e8": {
+      "fp": "9aa7d5c6e8",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/versions.py:151",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "a486198bd5": {
+      "fp": "a486198bd5",
+      "title": "except 直接 pass",
+      "loc": "butler/skills/versions.py:161",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    },
+    "a228ac70cc": {
+      "fp": "a228ac70cc",
+      "title": "except 直接 pass",
+      "loc": "butler/store/txn_census.py:67",
+      "stage": "fast-core",
+      "severity": "P3",
+      "first": "R9",
+      "last": "R9"
+    }
+  }
+}

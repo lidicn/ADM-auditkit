@@ -1,0 +1,272 @@
+rules:
+  # ================= A. 资源生命周期 =================
+  - id: afb-file-open-no-context
+    languages: [python]
+    severity: WARNING
+    message: "[资源泄漏] open() 未用 with 包裹且未见 close()，长驻进程会耗尽 fd（AutoForge 是常驻服务）。"
+    patterns:
+      - pattern: $V = open(...)
+      - pattern-not-inside: |
+          with ...:
+            ...
+
+  - id: afb-lock-acquire-no-finally
+    languages: [python]
+    severity: HIGH
+    message: "[死锁风险] 锁 acquire() 后未放在 try/finally 或 with 中释放；异常路径会永久持锁，导致整个写入面卡死。"
+    patterns:
+      - pattern: $L.acquire(...)
+      - pattern-not-inside: |
+          try:
+            ...
+          finally:
+            ...
+      - pattern-not-inside: |
+          with ...:
+            ...
+
+  - id: afb-thread-no-daemon-no-join
+    languages: [python]
+    severity: MEDIUM
+    message: "[退出挂死] 线程启动但既非 daemon 也无 join 路径，进程退出/重启时会挂住（影响优雅停机与 supervisor 重启）。"
+    patterns:
+      - pattern: $T.start()
+      - pattern-not-inside: |
+          $T.daemon = True
+          ...
+
+  - id: afb-socket-client-no-close
+    languages: [python]
+    severity: MEDIUM
+    message: "[连接泄漏] 网络客户端未在 finally/with 中关闭，重连风暴下句柄耗尽。"
+    patterns:
+      - pattern-either:
+          - pattern: $C = websockets.connect(...)
+          - pattern: $C = mqtt.Client(...)
+      - pattern-not-inside: |
+          with ...:
+            ...
+
+  # ================= B. 并发与竞态 =================
+  - id: afb-mutable-global-state
+    languages: [python]
+    severity: MEDIUM
+    message: "[并发竞态] 模块级可变容器（dict/list/set）被跨函数共享；多 worker/线程下无锁读写会产生状态覆盖。"
+    patterns:
+      - pattern-either:
+          - pattern: $G = {}
+          - pattern: $G = []
+          - pattern: $G = set()
+      - pattern-inside: |
+          ...
+      - metavariable-regex:
+          metavariable: $G
+          regex: "(?i)^(_?[a-z][a-z0-9_]*)$"
+      - pattern-not-inside: |
+          def $F(...):
+            ...
+
+  - id: afb-sleep-in-loop
+    languages: [python]
+    severity: LOW
+    message: "[忙等/漂移] while 循环内 sleep，缺少退出条件或超时上限，异常时会永久空转占满 CPU 或永不退出。"
+    patterns:
+      - pattern: |
+          while ...:
+            ...
+            time.sleep(...)
+
+  - id: afb-async-no-await
+    languages: [python]
+    severity: HIGH
+    message: "[协程静默失效] async 函数内调用同步阻塞 API（time.sleep/requests/阻塞 IO），会卡死整个事件循环。"
+    patterns:
+      - pattern-either:
+          - pattern: time.sleep(...)
+          - pattern: requests.$M(...)
+      - pattern-inside: |
+          async def $F(...):
+            ...
+
+  - id: afb-task-not-awaited
+    languages: [python]
+    severity: HIGH
+    message: "[任务丢失] create_task/ensure_future 结果未被持有或 await，任务可能被 GC 回收，且异常永久丢失。"
+    pattern-either:
+      - pattern: asyncio.create_task(...)
+      - pattern: asyncio.ensure_future(...)
+      - pattern: $LOOP.create_task(...)
+
+  # ================= C. 失败处理与可观测性 =================
+  - id: afb-bare-except
+    languages: [python]
+    severity: HIGH
+    message: "[错误吞噬] 裸 except 捕获所有异常（含 KeyboardInterrupt/SystemExit），故障被完全隐藏且无法中断进程。"
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except:
+            ...
+
+  - id: afb-except-log-no-reraise
+    languages: [python]
+    severity: MEDIUM
+    message: "[静默降级] 异常仅记录不重抛也不改状态，调用方会拿到上一次成功值，表现为数据陈旧而非报错。"
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except ...:
+            ...
+            logging.$M(...)
+      - pattern-not: |
+          try:
+            ...
+          except ...:
+            ...
+            logging.$M(...)
+            raise
+
+  - id: afb-return-none-on-error
+    languages: [python]
+    severity: MEDIUM
+    message: "[空值传播] 异常分支返回 None，调用方若直接解引用会 AttributeError，属于典型的级联崩溃源。"
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except ...:
+            return None
+
+  - id: afb-keyerror-unchecked
+    languages: [python]
+    severity: MEDIUM
+    message: "[KeyError] 直接下标取 dict，键缺失会抛异常；配置/IR 字段演进时是最常见崩溃点。"
+    patterns:
+      - pattern: $D["$K"]
+      - pattern-not-inside: |
+          if "$K" in $D:
+            ...
+      - pattern-not: $D["$K"] = ...
+      - metavariable-regex:
+          metavariable: $K
+          regex: "^_(?:[a-z_]+)$|^(?:diff_sha|stage|honest_report|simulate_track)$"
+
+  # ================= D. 数值与边界 =================
+  - id: afb-division-zero
+    languages: [python]
+    severity: MEDIUM
+    message: "[除零] 除法分母为变量且未判零；计数为 0 时抛 ZeroDivisionError 使整个 tick 失败。"
+    patterns:
+      - pattern: $A / $B
+      - metavariable-regex:
+          metavariable: $B
+          regex: "(?i)^(len\\(|count|total|n|num|size|size_|.*_count|.*_len).*"
+      - pattern-not-inside: |
+          if $B:
+            ...
+
+  - id: afb-float-equality
+    languages: [python]
+    severity: LOW
+    message: "[浮点比较] 浮点数用 ==/!= 比较，阈值判断会因精度漂移产生间歇性误判（表现为偶发功能失效）。"
+    patterns:
+      - pattern-either:
+          - pattern: $A == $B
+          - pattern: $A != $B
+      - metavariable-regex:
+          metavariable: $A
+          regex: "(?i).*(score|ratio|rate|threshold|prob|confidence|weight|temp|value|duration).*"
+
+  - id: afb-index-unsafe
+    languages: [python]
+    severity: MEDIUM
+    message: "[索引越界] 直接取 [0]/[-1] 而未判空列表；空集合时抛 IndexError。"
+    patterns:
+      - pattern-either:
+          - pattern: $L[0]
+          - pattern: $L[-1]
+      - pattern-not-inside: |
+          if $L:
+            ...
+      - metavariable-regex:
+          metavariable: $L
+          regex: "(?i).*(items|results|list|entries|candidates|matches|rows|calls|events|states).*"
+
+  # ================= E. 时间与调度 =================
+  - id: afb-naive-datetime-now
+    languages: [python]
+    severity: MEDIUM
+    message: "[时区] 使用 naive datetime.now()；跨时区/夏令时会出现调度漂移与回放不一致（项目已有 af_time，应统一）。"
+    pattern-either:
+      - pattern: datetime.now()
+      - pattern: datetime.utcnow()
+
+  - id: afb-retry-no-backoff
+    languages: [python]
+    severity: MEDIUM
+    message: "[重试风暴] 重试循环内无 sleep/退避，下游故障时会瞬间打满并放大故障。"
+    patterns:
+      - pattern: |
+          for $I in range(...):
+            ...
+            try:
+              ...
+            except ...:
+              ...
+      - pattern-not-inside: |
+          for $I in range(...):
+            ...
+            time.sleep(...)
+
+  # ================= F. 数据结构与内存 =================
+  - id: afb-unbounded-append
+    languages: [python]
+    severity: MEDIUM
+    message: "[无界增长] 长驻循环内 append 到列表且无裁剪，运行久了内存单调上涨直至 OOM（项目已有 af_bounded_caches 需确认覆盖）。"
+    patterns:
+      - pattern: $L.append(...)
+      - pattern-inside: |
+          while True:
+            ...
+
+  - id: afb-dict-mutation-during-iter
+    languages: [python]
+    severity: HIGH
+    message: "[迭代中修改] 遍历 dict/list 的同时增删元素，会抛 RuntimeError 导致该轮处理整体失败。"
+    patterns:
+      - pattern: |
+          for $K in $D:
+            ...
+            $D.pop(...)
+
+  # ================= G. 逻辑正确性 =================
+  - id: afb-mutable-default-arg
+    languages: [python]
+    severity: HIGH
+    message: "[默认参数共享] 可变默认参数在多次调用间共享状态，是典型的跨请求数据串扰 bug。"
+    pattern-either:
+      - pattern: |
+          def $F(..., $A = {}, ...):
+            ...
+      - pattern: |
+          def $F(..., $A = [], ...):
+            ...
+
+  - id: afb-is-literal-compare
+    languages: [python]
+    severity: LOW
+    message: "[身份比较] 用 is 比较字符串/数字字面量，依赖 CPython 驻留实现，跨版本/大字符串会偶发 False。"
+    patterns:
+      - pattern-either:
+          - pattern: $X is "..."
+          - pattern: $X is not "..."
+
+  - id: afb-assign-in-loop-condition
+    languages: [python]
+    severity: LOW
+    message: "[可疑赋值] if 条件中使用 = 风格的比较（如 == True），可能掩盖类型错误。"
+    pattern-either:
+      - pattern: $X == True
+      - pattern: $X == False

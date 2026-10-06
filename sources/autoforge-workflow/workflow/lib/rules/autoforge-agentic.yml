@@ -1,0 +1,259 @@
+rules:
+  # ---------- A. Agentic 执行链：不可信输入 → 能力/sink ----------
+  - id: af-taint-nl-to-action
+    languages: [python]
+    severity: WARNING
+    message: >
+      [Agentic] 自然语言/外部输入经 $SOURCE 进入动作执行路径 $SINK。
+      需确认存在确定性校验（schema/白名单/授权复核），而非仅靠提示词约束。
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: os.environ[...]
+          - pattern: os.environ.get(...)
+          - pattern: sys.argv
+          - pattern: request.$M
+          - pattern: json.loads(...)
+          - pattern: yaml.safe_load(...)
+          - pattern: yaml.load(...)
+          - pattern: $REQ.query_params[...]
+          - pattern: $REQ.body()
+    pattern-sinks:
+      - pattern-either:
+          - pattern: subprocess.$C(..., shell=True, ...)
+          - pattern: subprocess.$C([..., $V, ...], ...)
+          - pattern: os.system(...)
+          - pattern: eval(...)
+          - pattern: exec(...)
+          - pattern: open(..., "w", ...)
+          - pattern: $HA.call_service(...)
+          - pattern: $CLI.publish(...)
+          - pattern: $MCP.call_tool(...)
+          - pattern: requests.$M(..., $URL, ...)
+          - pattern: httpx.$M(..., $URL, ...)
+    pattern-sanitizers:
+      - pattern: jsonschema.validate(...)
+      - pattern: $S.full_clean(...)
+      - pattern: shlex.quote(...)
+
+  - id: af-shell-true
+    languages: [python]
+    severity: ERROR
+    message: "[RCE] subprocess 使用 shell=True；在 agent 生成参数的场景下等价于任意命令执行。"
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$C(..., shell=True, ...)
+          - pattern: subprocess.$C("...", shell=True, ...)
+
+  - id: af-eval-exec-dynamic
+    languages: [python]
+    severity: ERROR
+    message: "[RCE] eval/exec 作用于非字面量；agent 或模型输出可直接变成代码。"
+    patterns:
+      - pattern-either:
+          - pattern: eval($X, ...)
+          - pattern: exec($X, ...)
+          - pattern: getattr($O, $NAME)(...)
+      - pattern-not: eval("...", ...)
+      - pattern-not: exec("...", ...)
+
+  # ---------- B. 提示词与模型输出信任边界 ----------
+  - id: af-prompt-concat
+    languages: [python]
+    severity: WARNING
+    message: >
+      [提示注入] prompt 由字符串拼接/f-string 组装（变量 $V）。
+      需确认外部内容被标注为不可信、且不能改写系统指令或触发能力。
+    patterns:
+      - pattern-either:
+          - pattern: $P = $P + $V
+          - pattern: $P += $V
+          - pattern: '"...".format(..., $V, ...)'
+          - pattern: f"...{$V}..."
+      - metavariable-regex:
+          metavariable: $P
+          regex: (?i).*(prompt|system|instruction|template|spec|context).*
+
+  - id: af-model-output-trusted
+    languages: [python]
+    severity: WARNING
+    message: "[提示注入] 模型/工具返回值未校验即进入 sink（$SINK）。结构化输出只约束形状，不等于授权或安全路径。"
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R["choices"][...]
+          - pattern: $R["content"]
+          - pattern: $M.completions.create(...)
+          - pattern: $M.messages.create(...)
+          - pattern: $TOOL.result
+          - pattern: $MCP_RESP["result"]
+    pattern-sinks:
+      - pattern-either:
+          - pattern: subprocess.$C(...)
+          - pattern: open(..., "w", ...)
+          - pattern: os.remove(...)
+          - pattern: shutil.rmtree(...)
+          - pattern: $HA.call_service(...)
+          - pattern: $DB.execute(...)
+
+  # ---------- C. 密钥与凭据 ----------
+  - id: af-secret-env-to-log-or-state
+    languages: [python]
+    severity: WARNING
+    message: "[密钥] 环境变量密钥进入日志/持久化/返回值，存在泄露面（$SINK）。"
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: os.environ[...]
+              - pattern: os.environ.get("$K", ...)
+          - metavariable-regex:
+              metavariable: $K
+              regex: (?i).*(token|secret|key|password|passwd|api_key|apikey|credential|auth).*
+    pattern-sinks:
+      - pattern-either:
+          - pattern: logging.$M(...)
+          - pattern: print(...)
+          - pattern: $LOG.$M(...)
+          - pattern: json.dumps(...)
+          - pattern: $W.write(...)
+          - pattern: $DB.insert(...)
+          - pattern: $WS.send(...)
+
+  - id: af-token-unsafe-compare
+    languages: [python]
+    severity: ERROR
+    message: "[认证] 令牌/密钥用 == 比较（可被时序攻击）；应使用 hmac.compare_digest 或 secrets.compare_digest。"
+    patterns:
+      - pattern-either:
+          - pattern: $A == $B
+          - pattern: $A != $B
+      - metavariable-regex:
+          metavariable: $A
+          regex: (?i).*(token|secret|signature|hmac|auth|api_key).*
+
+  - id: af-insecure-random
+    languages: [python]
+    severity: WARNING
+    message: "[认证] random 用于令牌/ID/随机数生成，应使用 secrets 模块。"
+    patterns:
+      - pattern-either:
+          - pattern: random.random()
+          - pattern: random.randint(...)
+          - pattern: random.choice(...)
+      - pattern-inside: |
+          def $F(..., $A, ...):
+            ...
+      - metavariable-regex:
+          metavariable: $F
+          regex: (?i).*(token|secret|nonce|salt|session|otp|code).*
+
+  # ---------- D. 文件与原子性（TOCTOU / 路径穿越 / 锁） ----------
+  - id: af-path-traversal-write
+    languages: [python]
+    severity: WARNING
+    message: "[文件] 外部可控变量参与路径拼接后写入；需 realpath 校验前缀 + 原子写。"
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: os.environ[...]
+          - pattern: json.loads(...)
+          - pattern: sys.argv
+          - pattern: request.$M
+          - pattern: $REQ.$M
+    pattern-sinks:
+      - pattern-either:
+          - pattern: open(..., "w", ...)
+          - pattern: open(..., "a", ...)
+          - pattern: os.remove(...)
+          - pattern: shutil.rmtree(...)
+          - pattern: os.rename(...)
+    pattern-sanitizers:
+      - pattern: os.path.realpath(...)
+      - pattern: os.path.abspath(...)
+
+  - id: af-write-without-atomic-or-lock
+    languages: [python]
+    severity: INFO
+    message: "[原子性] 直接 open(...,'w') 写状态文件；确认项目内 af_atomic/af_flock 是否应被强制使用（半写/并发覆盖）。"
+    patterns:
+      - pattern: open($P, "w", ...)
+      - pattern-not-inside: |
+          with $LOCK:
+            ...
+      - metavariable-regex:
+          metavariable: $P
+          regex: (?i).*(state|store|db|config|persist|json|yaml|yml).*
+
+  # ---------- E. 网络与协议边界 ----------
+  - id: af-request-without-timeout
+    languages: [python]
+    severity: WARNING
+    message: "[可用性/DoS] 外部 HTTP 调用无 timeout，进程可被挂死（agent 长链路下放大）。"
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M($URL, ...)
+          - pattern: httpx.$M($URL, ...)
+      - pattern-not: requests.$M(..., timeout=..., ...)
+      - pattern-not: httpx.$M(..., timeout=..., ...)
+
+  - id: af-tls-verify-disabled
+    languages: [python]
+    severity: ERROR
+    message: "[传输] 关闭 TLS 校验（verify=False），中间人可投毒模型/HA 指令链路。"
+    patterns:
+      - pattern-either:
+          - pattern: requests.$M(..., verify=False, ...)
+          - pattern: httpx.$M(..., verify=False, ...)
+          - pattern: ssl._create_unverified_context(...)
+          - pattern: ssl.CERT_NONE
+
+  - id: af-mqtt-no-tls-or-auth
+    languages: [python]
+    severity: WARNING
+    message: "[IoT/MQTT] MQTT 客户端未显式设置 TLS/凭据；bridge 若直连家庭总线，等同未授权控制面。"
+    patterns:
+      - pattern-either:
+          - pattern: mqtt.Client(...)
+          - pattern: $C.username_pw_set(None, None)
+          - pattern: $C.tls_set(...)
+      - pattern-not-inside: |
+          $C.tls_set(...)
+          ...
+
+  # ---------- F. 静默失败/失败开放 ----------
+  - id: af-swallow-exception
+    languages: [python]
+    severity: WARNING
+    message: "[失败开放] except 后直接 pass/continue，安全校验异常被吞掉后流程继续（fail-open 风险）。"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              try:
+                ...
+              except ...:
+                pass
+          - pattern: |
+              try:
+                ...
+              except ...:
+                continue
+      - pattern-not-inside: |
+          try:
+            ...
+          except ...:
+            pass
+          finally:
+            ...
+
+  - id: af-broad-except-return-true
+    languages: [python]
+    severity: ERROR
+    message: "[失败开放] 异常路径返回成功/True，校验失败会被上层当作通过（门闩失效）。"
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except Exception:
+            ...
+            return True

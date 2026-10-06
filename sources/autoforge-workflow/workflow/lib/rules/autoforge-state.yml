@@ -1,0 +1,203 @@
+rules:
+  # ============ 第二轮专题：状态一致性 / 错误恢复 / 崩溃恢复 ============
+  # 与第一轮（资源泄漏、除零、索引、竞态、混合返回）不重叠
+
+  # ---------- A. 静默失败：异常被伪装成"成功但没有数据" ----------
+  - id: afs-except-return-empty-as-success
+    languages: [python]
+    severity: HIGH
+    message: >
+      [静默失败] 异常分支返回空容器/True/0。调用方不会崩溃，会把「失败」当成
+      「成功但没数据」继续走——比 return None 更隐蔽，是最难发现的一致性 bug。
+    pattern-either:
+      - pattern: |
+          try:
+            ...
+          except $E:
+            ...
+            return {}
+      - pattern: |
+          try:
+            ...
+          except $E:
+            ...
+            return []
+      - pattern: |
+          try:
+            ...
+          except $E:
+            ...
+            return ""
+      - pattern: |
+          try:
+            ...
+          except $E:
+            ...
+            return True
+      - pattern: |
+          try:
+            ...
+          except $E:
+            ...
+            return 0
+
+  - id: afs-except-continue-in-loop
+    languages: [python]
+    severity: HIGH
+    message: >
+      [部分处理] 循环体内 except: continue，单条失败被跳过且不计数。
+      批量操作会「静默少做一部分」，表现为数据残缺而非报错。
+    pattern-either:
+      - pattern: |
+          for $X in $Y:
+            ...
+            try:
+              ...
+            except ...:
+              continue
+      - pattern: |
+          while ...:
+            ...
+            try:
+              ...
+            except ...:
+              continue
+
+  # ---------- B. 持久化原子性 ----------
+  - id: afs-nonatomic-state-write
+    languages: [python]
+    severity: MEDIUM
+    message: >
+      [原子性] 状态落盘未走 atomic_write_text()。写一半崩溃会留下截断/损坏 JSON，
+      重启后加载失败——项目已有 af_atomic.atomic_write_text 契约，此处疑似绕过。
+    patterns:
+      - pattern-either:
+          - pattern: json.dump($D, $F, ...)
+          - pattern: $P.write_text(...)
+          - pattern: $P.write_bytes(...)
+          - pattern: $F.write(...)
+      - pattern-not-inside: |
+          def atomic_write_text(...):
+            ...
+      - pattern-not-inside: |
+          def _atomic_write_text(...):
+            ...
+      - pattern-not-inside: |
+          def _atomic_write(...):
+            ...
+
+  - id: afs-json-load-unguarded
+    languages: [python]
+    severity: MEDIUM
+    message: >
+      [崩溃恢复] 读取状态文件未包裹异常处理。文件内容损坏（上一条规则的非原子写产物）
+      会让加载直接抛异常，服务起不来且无降级路径。
+    patterns:
+      - pattern-either:
+          - pattern: json.loads($P.read_text(...))
+          - pattern: json.load(open(...))
+          - pattern: json.loads(open(...).read())
+      - pattern-not-inside: |
+          try:
+            ...
+          except ...:
+            ...
+
+  # ---------- C. 时钟与超时 ----------
+  - id: afs-wallclock-for-timeout
+    languages: [python]
+    severity: MEDIUM
+    message: >
+      [时钟回拨] 用 time.time()（墙上时钟）做超时/租约判定。NTP 校时或手动改表会让
+      超时瞬间失效或永久卡死。项目 af_time 已提供 monotonic()，应改用它。
+    patterns:
+      - pattern: time.time()
+      - pattern-inside: |
+          def $F(...):
+            ...
+      - metavariable-regex:
+          metavariable: $F
+          regex: "(?i).*(deadline|timeout|expire|elapsed|lease|until|duration|window).*"
+
+  - id: afs-naive-datetime-compare
+    languages: [python]
+    severity: MEDIUM
+    message: >
+      [时区] datetime.now()/utcnow() 产出 naive 时间参与比较或存储。aware 与 naive
+      相减会抛 TypeError；跨时区部署会出现调度漂移。项目有 af_time.ensure_aware/utc_now。
+    patterns:
+      - pattern-either:
+          - pattern: datetime.now()
+          - pattern: datetime.utcnow()
+      - pattern-not-inside: |
+          def now(...):
+            ...
+      - pattern-not: datetime.now(timezone.utc)
+
+  # ---------- D. 锁粒度 ----------
+  - id: afs-io-under-lock
+    languages: [python]
+    severity: MEDIUM
+    message: >
+      [锁粒度] 持锁期间做文件/网络 IO。IO 阻塞会把锁持有时间放大几个数量级，
+      造成整条写入面串行化甚至假死。应把 IO 移到锁外。
+    patterns:
+      - pattern-either:
+          - pattern: $P.read_text(...)
+          - pattern: json.dump(...)
+          - pattern: requests.$M(...)
+          - pattern: httpx.$M(...)
+          - pattern: $C.execute(...)
+      - pattern-inside: |
+          with $LOCK:
+            ...
+
+  # ---------- E. 部分更新 / 状态回滚 ----------
+  - id: afs-mutate-then-may-raise
+    languages: [python]
+    severity: MEDIUM
+    message: >
+      [部分更新] 先改内部状态，后跟可能抛异常的操作，且无回滚。中间失败会留下
+      「已改一半」的状态，与持久化内容不一致。
+    patterns:
+      - pattern-either:
+          - pattern: self.$S[$K] = $V
+          - pattern: self.$S.append(...)
+      - pattern-inside: |
+          def $F(...):
+            ...
+            self.$M(...)
+            ...
+      - pattern-not-inside: |
+          try:
+            ...
+          except ...:
+            ...
+            self.$S.pop(...)
+
+  # ---------- F. 缓存失效 ----------
+  - id: afs-cache-assign-no-invalidate
+    languages: [python]
+    severity: LOW
+    message: >
+      [陈旧缓存] 实例缓存被赋值，但同类中未见置空/失效路径。底层数据更新后
+      仍返回旧值，表现为「改了不生效」，且重启才恢复（掩盖了真因）。
+    patterns:
+      - pattern: self.$C = $V
+      - metavariable-regex:
+          metavariable: $C
+          regex: "(?i)^_?(cache|cached|_loaded|_snapshot)$"
+
+  # ---------- G. 默认值掩盖失败 ----------
+  - id: afs-get-default-masks-missing
+    languages: [python]
+    severity: LOW
+    message: >
+      [默认值掩盖] 读配置/状态用 .get(k, 默认值) 且默认值为真值。键缺失与
+      「值为空」无法区分，配置漏项会被当成合法空状态继续运行。
+    patterns:
+      - pattern-either:
+          - pattern: $D.get($K, {})
+          - pattern: $D.get($K, [])
+          - pattern: $D.get($K, True)
+      - pattern-not: $D.get($K, {}) == ...

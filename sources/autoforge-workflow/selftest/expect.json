@@ -1,0 +1,21 @@
+{
+  "_comment": "clean 样本上允许命中的规则。列入者须在 reason 说明为何不是规则缺陷；每次新增须同步 PITFALLS.md。目标：该清单只减不增。",
+  "allow_on_clean": {
+    "DEAD-03-dead-api": "样本固有：单文件样本里所有函数都无外部引用，规则无法区分『真死代码』与『独立文件』",
+    "IN-03-path-join": "宽规则：Path(path) 只是包装不是拼接，但规则有用（提示人工确认路径构造），保留命中",
+    "AFS-01-silent-failure": "宽规则：except 后返回 {} / [] 既可能是正确降级默认值，也可能是伪装成功，规则无法判定，必须人工",
+    "ERRH-02-fake-success": "同 AFS-01，重复计入",
+    "TX-01-multi-write-no-tx": "宽规则：『先备份→写→删备份』是正确顺序，规则只看落盘站点数不看顺序",
+    "PAT-06-audit-in-except-unprotected": "需被调方语义：调用点形状无法区分『被调方自带兜底』与『无兜底』，PAT-06 已加被调方索引但仍保守",
+    "CONC-08-partial-lock-coverage": "读-改-写模式中 _load() 在锁外属正确形态（先加载快照、再持锁改并写盘）；规则无法区分『该加锁却漏了』与『有意只锁写段』，需人工判",
+    "OBS-02-unbounded-accumulation": "已在规则层修好：有删除路径（pop/clear/remove）的映射型容器不是单调累加，已排除；clean 归零且 dirty 召回未丢"
+  },
+  "require_on_dirty": [
+    "state_defects",
+    "consistency_defects",
+    "serialization_defects",
+    "errorhandling_defects",
+    "observability_defects",
+    "auth_defects"
+  ]
+}

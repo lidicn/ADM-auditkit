@@ -1,0 +1,238 @@
+{
+  "_doc": "已知缺陷回归集。每条 = 历史审计中已确认的缺陷，标注应由哪个阶段捕获。改判据后跑 check_regression.py，命中率不得下降。",
+  "_usage": "python3 auditkit/regression/check_regression.py",
+  "cases": [
+    {
+      "id": "V29",
+      "file": "butler/skills/quarantine.py",
+      "line": 178,
+      "stage": "kwcontract",
+      "desc": "bark.push(reason=) 参数不存在",
+      "sev": "P1"
+    },
+    {
+      "id": "V35",
+      "file": "butler/timeseries/anomaly.py",
+      "line": 371,
+      "stage": "kwcontract",
+      "desc": "tts.speak(priority=) 参数不存在",
+      "sev": "P1"
+    },
+    {
+      "id": "V36",
+      "file": "butler/modes/engine.py",
+      "line": 221,
+      "stage": "kwcontract",
+      "desc": "ha.call_service(entity_id=) 参数不存在",
+      "sev": "P1"
+    },
+    {
+      "id": "P0-10a",
+      "file": "butler/af_bridge.py",
+      "line": 177,
+      "stage": "kwcontract",
+      "desc": "speak(device=) 参数不存在",
+      "sev": "P0"
+    },
+    {
+      "id": "V45",
+      "file": "butler/api/doubao_webhook.py",
+      "line": 324,
+      "stage": "httpcontract",
+      "desc": "POST 响应完全丢弃，401 视为成功",
+      "sev": "P1"
+    },
+    {
+      "id": "V45b",
+      "file": "butler/api/doubao_webhook.py",
+      "line": 333,
+      "stage": "httpcontract",
+      "desc": "POST 响应完全丢弃",
+      "sev": "P1"
+    },
+    {
+      "id": "P0-14",
+      "file": "butler/integrations/deskpilot.py",
+      "line": 40,
+      "stage": "httpcontract",
+      "desc": "health() 不检查状态码，403 报 ok",
+      "sev": "P0"
+    },
+    {
+      "id": "V37",
+      "file": "butler/store/repo.py",
+      "line": 498,
+      "stage": "falsyzero",
+      "desc": "success_rate or 1 → 0% 排到最优",
+      "sev": "P2"
+    },
+    {
+      "id": "V38",
+      "file": "butler/skills/engines/llm_decide/engine.py",
+      "line": 125,
+      "stage": "falsyzero",
+      "desc": "temperature 0.0 被改成 0.7",
+      "sev": "P2"
+    },
+    {
+      "id": "V41",
+      "file": "butler/triggers/engine.py",
+      "line": 475,
+      "stage": "timeunit",
+      "desc": "status() monotonic 减 wall clock",
+      "sev": "P2"
+    },
+    {
+      "id": "V30",
+      "file": "butler/schema.py",
+      "line": 31,
+      "stage": "multisource",
+      "desc": "_EVENTS 缺 heartbeat，孤儿副本",
+      "sev": "P1"
+    },
+    {
+      "id": "P1-43a",
+      "file": "butler/memory/feeder.py",
+      "line": 22,
+      "stage": "multisource",
+      "desc": "FEEDABLE_ROLES 6 角色 vs DEFAULT_ROLES 5",
+      "sev": "P1"
+    },
+    {
+      "id": "P1-43b",
+      "file": "butler/memory/extractor.py",
+      "line": 265,
+      "stage": "multisource",
+      "desc": "角色白名单内联 6 vs DEFAULT_ROLES 5",
+      "sev": "P1"
+    },
+    {
+      "id": "P1-43c",
+      "file": "butler/api/memory_routes.py",
+      "line": 329,
+      "stage": "multisource",
+      "desc": "角色白名单内联 6 vs DEFAULT_ROLES 5",
+      "sev": "P1"
+    },
+    {
+      "id": "P0-11a",
+      "file": "butler/config.py",
+      "line": 313,
+      "stage": "deploycontract",
+      "desc": "DESKPILOT_API_TOKEN 硬门槛未在部署清单",
+      "sev": "P0"
+    },
+    {
+      "id": "P0-11b",
+      "file": "butler/config.py",
+      "line": 313,
+      "stage": "deploycontract",
+      "desc": "TASK_REPORT_TOKEN 硬门槛未在部署清单",
+      "sev": "P0"
+    },
+    {
+      "id": "P0-15a",
+      "file": "butler/engine.py",
+      "line": 0,
+      "stage": "dupfiles",
+      "desc": "孤儿模块",
+      "sev": "P0"
+    },
+    {
+      "id": "P0-15b",
+      "file": "butler/deskpilot.py",
+      "line": 0,
+      "stage": "dupfiles",
+      "desc": "孤儿模块（含未修复 bug 的旧分叉）",
+      "sev": "P0"
+    },
+    {
+      "id": "P0-15c",
+      "file": "butler/doubao.py",
+      "line": 0,
+      "stage": "dupfiles",
+      "desc": "孤儿模块",
+      "sev": "P0"
+    },
+    {
+      "id": "P0-15d",
+      "file": "butler/core/agent_routes.py",
+      "line": 0,
+      "stage": "dupfiles",
+      "desc": "孤儿模块",
+      "sev": "P0"
+    },
+    {
+      "id": "P0-15e",
+      "file": "butler/defaults.py",
+      "line": 0,
+      "stage": "dupfiles",
+      "desc": "孤儿模块",
+      "sev": "P0"
+    },
+    {
+      "id": "C1a",
+      "file": "butler/tts/singleton.py",
+      "line": 33,
+      "stage": "concurrency",
+      "desc": "create_task 返回值未保存",
+      "sev": "P0"
+    },
+    {
+      "id": "C1b",
+      "file": "butler/skills/runner.py",
+      "line": 452,
+      "stage": "concurrency",
+      "desc": "lambda 内 create_task 未保存",
+      "sev": "P2"
+    },
+    {
+      "id": "A1a",
+      "file": "butler/api/doubao_webhook.py",
+      "line": 285,
+      "stage": "atomicity",
+      "desc": "save_user_page 裸写无 fsync",
+      "sev": "P2"
+    },
+    {
+      "id": "A1b",
+      "file": "butler/skills/store.py",
+      "line": 0,
+      "stage": "atomicity",
+      "desc": "固定 tmp 名 + 锁外写",
+      "sev": "P1"
+    },
+    {
+      "id": "E1",
+      "file": "butler/api/config_routes.py",
+      "line": 23,
+      "stage": "errpath",
+      "desc": "except 分支用未导入的 logger",
+      "sev": "P1"
+    },
+    {
+      "id": "L1",
+      "file": "butler/presence/store.py",
+      "line": 0,
+      "stage": "lifecycle",
+      "desc": "PresenceStore 实例属性连接无释放（该阶段只报文件级）",
+      "sev": "P1"
+    },
+    {
+      "id": "I1",
+      "file": "butler/morning/routine.py",
+      "line": 0,
+      "stage": "identity",
+      "desc": "成员名 lidicn 硬编码",
+      "sev": "P1"
+    },
+    {
+      "id": "S1",
+      "file": "butler/core/briefing.py",
+      "line": 98,
+      "stage": "secrets",
+      "desc": "天气接口硬编码内网地址",
+      "sev": "P1"
+    }
+  ]
+}

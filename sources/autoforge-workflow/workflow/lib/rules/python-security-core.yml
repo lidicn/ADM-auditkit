@@ -1,0 +1,157 @@
+rules:
+  # 离线通用 Python 安全基线（官方 registry 不可达时的替代集合）
+  - id: afg-subprocess-dynamic
+    languages: [python]
+    severity: WARNING
+    message: "subprocess 调用含变量/拼接，存在命令注入风险，需白名单 + 参数数组"
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$F($CMD, ...)
+          - pattern: subprocess.$F([..., $X, ...], ...)
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: ".*(\\+|%|\\{|f['\"]|\\.format|join\\().*"
+  - id: afg-os-system
+    languages: [python]
+    severity: ERROR
+    message: "os.system/popen 直接执行字符串命令"
+    pattern-either:
+      - pattern: os.system($X)
+      - pattern: os.popen($X)
+  - id: afg-pickle-load
+    languages: [python]
+    severity: ERROR
+    message: "pickle/marshal 反序列化不可信数据可导致 RCE"
+    pattern-either:
+      - pattern: pickle.load($X)
+      - pattern: pickle.loads($X)
+      - pattern: marshal.load($X)
+      - pattern: marshal.loads($X)
+  - id: afg-yaml-unsafe
+    languages: [python]
+    severity: WARNING
+    message: "yaml.load 未指定 SafeLoader，可执行任意对象构造"
+    patterns:
+      - pattern: yaml.load($X, ...)
+      - pattern-not: yaml.load($X, Loader=yaml.SafeLoader, ...)
+  - id: afg-sql-concat
+    languages: [python]
+    severity: WARNING
+    message: "SQL 语句拼接/格式化，存在注入风险"
+    pattern-either:
+      - pattern: $CUR.execute("..." % ...)
+      - pattern: $CUR.execute("..." + ...)
+      - pattern: $CUR.execute(f"...", ...)
+      - pattern: $CUR.execute("...".format(...))
+  - id: afg-md5-sha1
+    languages: [python]
+    severity: WARNING
+    message: "使用 MD5/SHA1（非仅用于完整性校验时视为弱哈希）"
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: hashlib.sha1(...)
+  - id: afg-tempfile-insecure
+    languages: [python]
+    severity: WARNING
+    message: "使用 mktemp/tmp 目录手工拼路径，存在符号链接与竞态风险"
+    pattern-either:
+      - pattern: tempfile.mktemp(...)
+      - pattern: os.path.join(tempfile.gettempdir(), ...)
+  - id: afg-tar-extract
+    languages: [python]
+    severity: WARNING
+    message: "tar/zip 解压未校验成员路径（zip-slip / 路径穿越）"
+    pattern-either:
+      - pattern: $T.extractall(...)
+      - pattern: $T.extract(...)
+  - id: afg-xml-external
+    languages: [python]
+    severity: WARNING
+    message: "XML 解析可能允许外部实体（XXE）"
+    pattern-either:
+      - pattern: xml.etree.ElementTree.parse($X, ...)
+      - pattern: lxml.etree.parse($X, ...)
+      - pattern: xml.dom.minidom.parse($X, ...)
+  - id: afg-assert-used
+    languages: [python]
+    severity: INFO
+    message: "assert 用于校验，-O 模式会被移除，不能作为安全边界"
+    pattern: assert $X
+  - id: afg-open-without-encoding
+    languages: [python]
+    severity: INFO
+    message: "open 未指定 encoding，跨平台解析差异可导致校验绕过"
+    patterns:
+      - pattern: open($P, $M, ...)
+      - pattern-not: open($P, $M, encoding=..., ...)
+  - id: afg-chmod-world
+    languages: [python]
+    severity: WARNING
+    message: "权限设置过于宽松（0o777/0o666）"
+    pattern-either:
+      - pattern: os.chmod($P, 0o777)
+      - pattern: os.chmod($P, 0o666)
+      - pattern: os.chmod($P, 0o777, ...)
+  - id: afg-except-pass
+    languages: [python]
+    severity: WARNING
+    message: "异常被静默吞掉，安全失败路径不可观测"
+    patterns:
+      - pattern-inside: |
+          try:
+              ...
+          except ...:
+              ...
+      - pattern: pass
+  - id: afg-bind-all-interfaces
+    languages: [python]
+    severity: WARNING
+    message: "服务监听 0.0.0.0，需确认鉴权与网络暴露面"
+    pattern-either:
+      - pattern: $X.run(..., host="0.0.0.0", ...)
+      - pattern: $X.bind(("0.0.0.0", ...))
+      - pattern: $X.serve_forever(..., host="0.0.0.0", ...)
+  - id: afg-debug-enabled
+    languages: [python]
+    severity: WARNING
+    message: "调试/热重载在生产路径开启，可能暴露交互式控制台"
+    pattern-either:
+      - pattern: $X.run(..., debug=True, ...)
+      - pattern: $APP.debug = True
+      - pattern: uvicorn.run(..., reload=True, ...)
+  - id: afg-ssl-context-insecure
+    languages: [python]
+    severity: ERROR
+    message: "显式弱化 TLS（check_hostname=False / CERT_NONE）"
+    pattern-either:
+      - pattern: $C.check_hostname = False
+      - pattern: ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+      - pattern: $C.verify_mode = ssl.CERT_NONE
+  - id: afg-socket-listen
+    languages: [python]
+    severity: INFO
+    message: "裸 socket 监听，需确认鉴权层"
+    pattern-either:
+      - pattern: socket.socket(...).bind(...)
+  - id: afg-env-default-secret
+    languages: [python]
+    severity: WARNING
+    message: "凭据类变量带硬编码默认值"
+    patterns:
+      - pattern-either:
+          - pattern: os.environ.get("$K", $D)
+          - pattern: os.getenv("$K", $D)
+      - metavariable-regex:
+          metavariable: $K
+          regex: "(?i).*(token|secret|password|api_key|passwd).*"
+      - pattern-not: os.environ.get("$K", None)
+  - id: afg-print-sensitive
+    languages: [python]
+    severity: INFO
+    message: "直接 print/记录可能含凭据的变量"
+    patterns:
+      - pattern-either:
+          - pattern: print(..., $V, ...)
+      - metavariable-regex:
+          metavariable: $V
+          regex: "(?i).*(token|secret|password|api_key).*"

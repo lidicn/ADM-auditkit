@@ -1,0 +1,201 @@
+{
+  "ast_defects": {
+    "dirty": {
+      "AF-AST-MIXED-RETURN": 3
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "state_defects": {
+    "dirty": {
+      "AFS-05-wallclock-timeout": 1,
+      "AFS-04-unguarded-load": 4,
+      "AFS-03-nonatomic-write": 5,
+      "AFS-01-silent-failure": 1,
+      "AFS-07-io-under-lock": 1
+    },
+    "clean": {},
+    "clean_raw": {
+      "AFS-01-silent-failure": 3
+    },
+    "clean_allowed": [
+      "AFS-01-silent-failure"
+    ]
+  },
+  "concurrency_defects": {
+    "dirty": {
+      "CONC-08-partial-lock-coverage": 1
+    },
+    "clean": {},
+    "clean_raw": {
+      "CONC-08-partial-lock-coverage": 1
+    },
+    "clean_allowed": [
+      "CONC-08-partial-lock-coverage"
+    ]
+  },
+  "boundary_defects": {
+    "dirty": {
+      "RSC-02-recursion-no-budget": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "controlflow_defects": {
+    "dirty": {
+      "ERR-05-silent-except": 2
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "deadcode_defects": {
+    "dirty": {
+      "DEAD-03-dead-api": 32
+    },
+    "clean": {},
+    "clean_raw": {
+      "DEAD-03-dead-api": 15
+    },
+    "clean_allowed": [
+      "DEAD-03-dead-api"
+    ]
+  },
+  "time_numeric_defects": {
+    "dirty": {
+      "TIME-02-wall-timeout": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "input_defects": {
+    "dirty": {
+      "IN-03-path-join": 4
+    },
+    "clean": {},
+    "clean_raw": {
+      "IN-03-path-join": 5
+    },
+    "clean_allowed": [
+      "IN-03-path-join"
+    ]
+  },
+  "consistency_defects": {
+    "dirty": {
+      "TX-04-delete-then-write": 2,
+      "TX-01-multi-write-no-tx": 2
+    },
+    "clean": {},
+    "clean_raw": {
+      "TX-01-multi-write-no-tx": 1
+    },
+    "clean_allowed": [
+      "TX-01-multi-write-no-tx"
+    ]
+  },
+  "serialization_defects": {
+    "dirty": {
+      "SER-02-key-drift": 1,
+      "SER-05-default-str": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "errorhandling_defects": {
+    "dirty": {
+      "ERRH-01-retry-swallows": 1,
+      "ERRH-02-fake-success": 1
+    },
+    "clean": {},
+    "clean_raw": {
+      "ERRH-02-fake-success": 2
+    },
+    "clean_allowed": [
+      "ERRH-02-fake-success"
+    ]
+  },
+  "observability_defects": {
+    "dirty": {
+      "OBS-02-unbounded-accumulation": 4
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "config_compat_defects": {
+    "dirty": {
+      "CFG-01-config-no-struct-check": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "api_contract_defects": {
+    "dirty": {
+      "API-01-unknown-kwarg": 1,
+      "API-03-lsp-signature": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "semantic_defects": {
+    "dirty": {
+      "SEM-03-mutable-default": 1,
+      "SEM-04-unorderable-key": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "resource_defects": {
+    "dirty": {
+      "RES-02-handle-not-closed": 2,
+      "RES-01-fd-not-closed": 1,
+      "RES-05-subprocess-no-reap": 1,
+      "RES-03-thread-no-join": 1,
+      "RES-04-tmp-no-cleanup": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "pattern_propagation": {
+    "dirty": {
+      "PAT-04-module-level-env-parse": 2,
+      "PAT-03-parsed-unchecked": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "auth_defects": {
+    "dirty": {
+      "AUTH-05-lock-with-io": 1,
+      "AUTH-06-default-allow": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "rmw_consistency": {
+    "dirty": {
+      "RMW-01-rmw-inconsistency": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  },
+  "testgap_defects": {
+    "dirty": {
+      "TST-02-todo-marker": 1
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": []
+  }
+}

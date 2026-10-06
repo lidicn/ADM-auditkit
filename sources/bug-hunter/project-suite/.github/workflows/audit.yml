@@ -1,0 +1,55 @@
+name: 审计缺陷套件
+
+# 两套用例的生命周期不同，必须分开跑：
+#   countermeasure —— 常驻回归防线，注入修复方案后行为必须正常，永远要求绿
+#   bug_repro      —— 缺陷探针，断言「缺陷还活着」。当前 12 条缺陷均未修复，
+#                     所以它现在注定是红的；等缺陷修好后它反而会失败，
+#                     那才是「该删正测」的信号。故 continue-on-error。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  countermeasure:
+    name: 常驻防线（反测，必须绿）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+          pip install ./vendor/homesdk
+      - name: 运行反测
+        run: python -m pytest -m countermeasure -v
+
+  bug-repro:
+    name: 缺陷探针（正测，当前预期为红）
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+          pip install ./vendor/homesdk
+      - name: 运行正测（V4 需进程隔离，默认跳过）
+        run: python -m pytest -m bug_repro -v
+      - name: 运行需隔离的正测（独立进程）
+        env:
+          RUN_ISOLATED: "1"
+        run: python -m pytest -m "bug_repro and isolated" -v
+      - name: 解读
+        run: |
+          echo "正测全绿 = 12 条缺陷都还在（当前状态）"
+          echo "正测转红 = 对应缺陷已修复，请删除该条正测，反测已接管回归守护"
