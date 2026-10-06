@@ -1,0 +1,50 @@
+{
+  "root": "/usr/lib/python3/dist-packages/supervisor",
+  "languages": {
+    "files": {
+      "python": 66
+    },
+    "lines": {
+      "python": 36412
+    },
+    "primary": "python",
+    "share": {
+      "python": 1.0
+    }
+  },
+  "frameworks": [],
+  "python_packages": [
+    {
+      "path": ".",
+      "modules": 22
+    },
+    {
+      "path": "tests",
+      "modules": 22
+    },
+    {
+      "path": "medusa",
+      "modules": 13
+    }
+  ],
+  "tests": {
+    "dirs": [
+      {
+        "path": "tests",
+        "files": 26
+      }
+    ],
+    "has_pytest": false
+  },
+  "gates": {
+    "ci": [
+      {
+        "path": "scripts",
+        "count": 11
+      }
+    ],
+    "self_check_scripts": []
+  },
+  "entrypoints": [],
+  "has_python": true
+}

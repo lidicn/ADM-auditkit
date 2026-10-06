@@ -1,0 +1,107 @@
+{
+  "root": "/data/workspace/audit/src",
+  "languages": {
+    "files": {
+      "python": 305,
+      "shell": 3,
+      "yaml": 3,
+      "typescript": 36,
+      "javascript": 11
+    },
+    "lines": {
+      "python": 78542,
+      "shell": 428,
+      "yaml": 256,
+      "typescript": 3248,
+      "javascript": 881
+    },
+    "primary": "python",
+    "share": {
+      "python": 0.852,
+      "typescript": 0.101,
+      "javascript": 0.031,
+      "shell": 0.008,
+      "yaml": 0.008
+    }
+  },
+  "frameworks": [
+    "docker",
+    "fastapi",
+    "homeassistant",
+    "mqtt",
+    "pytest"
+  ],
+  "python_packages": [
+    {
+      "path": "src/autoforge",
+      "modules": 69
+    },
+    {
+      "path": "src/autoforge/af_closedloop",
+      "modules": 10
+    },
+    {
+      "path": "src/autoforge/af_vhass",
+      "modules": 10
+    },
+    {
+      "path": "src/autoforge/af_adapters",
+      "modules": 5
+    },
+    {
+      "path": "src/autoforge/af_ir",
+      "modules": 4
+    }
+  ],
+  "tests": {
+    "dirs": [
+      {
+        "path": "tests",
+        "files": 175
+      },
+      {
+        "path": "ui-user-mimo/tests",
+        "files": 8
+      }
+    ],
+    "has_pytest": true
+  },
+  "gates": {
+    "ci": [
+      {
+        "path": ".github/workflows",
+        "count": 1
+      },
+      {
+        "path": "gates.sh",
+        "count": 1
+      },
+      {
+        "path": "scripts",
+        "count": 28
+      }
+    ],
+    "self_check_scripts": [
+      "scripts/check_atomic_write_sites.py",
+      "scripts/check_bounded_caches.py",
+      "scripts/check_imports.py",
+      "scripts/check_ir_runtime_keys.py",
+      "scripts/check_mcp_arg_schemas.py",
+      "scripts/check_mqtt_runtime_dep.py",
+      "scripts/check_mqtt_subscriptions.py",
+      "scripts/check_mqtt_writers.py",
+      "scripts/check_param_injection.py",
+      "scripts/check_pkg_markers.py",
+      "scripts/check_snapshot_policy.py",
+      "scripts/check_states_fanout.py",
+      "scripts/check_tool_names.py",
+      "scripts/check_topic_whitelist.py",
+      "scripts/check_ui_api_paths.py",
+      "scripts/check_undefined_names.py"
+    ]
+  },
+  "entrypoints": [
+    "pyproject.toml"
+  ],
+  "has_python": true
+}

@@ -1,0 +1,10 @@
+# [D-44] 特权容器
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: app
+      image: myapp:latest
+      securityContext:
+        privileged: true
+  hostNetwork: true

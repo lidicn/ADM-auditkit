@@ -13,6 +13,16 @@ Thumbs.db
 .idea/
 
 # 审计结果（不提交大文件）
-reports/
+projects/*/round-*/findings/*.json
+projects/*/round-*/report.md
 *.sarif
 *.graphml
+
+# 临时
+tmp/
+*.bak
+
+# 二进制产物
+*.zip
+auditkit
+

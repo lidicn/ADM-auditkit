@@ -1,0 +1,34 @@
+{
+  "root": "/usr/lib/python3.10/asyncio",
+  "languages": {
+    "files": {
+      "python": 31
+    },
+    "lines": {
+      "python": 13129
+    },
+    "primary": "python",
+    "share": {
+      "python": 1.0
+    }
+  },
+  "frameworks": [],
+  "python_packages": [
+    {
+      "path": ".",
+      "modules": 31
+    }
+  ],
+  "tests": {
+    "dirs": [],
+    "has_pytest": false
+  },
+  "gates": {
+    "ci": [],
+    "self_check_scripts": []
+  },
+  "entrypoints": [
+    "__main__.py"
+  ],
+  "has_python": true
+}

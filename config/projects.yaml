@@ -1,0 +1,61 @@
+# ADM 审计工作流 —— 目标项目登记表
+#
+# 说明：
+#   - `path` 是本地副本路径。仓库未克隆时 auditkit 会提示而非静默跑空。
+#   - `focus` 列出该项目的重点分析器（其余照跑，只是报告里优先展示）。
+#   - 技术栈信息来自公开资料与画像探测；`known_stack` 仅作人工参考，
+#     实际判定以 `auditkit profile` 输出为准（避免把外部资料当事实）。
+#
+# 更新方式：直接改本文件，或用
+#   auditkit round <name> --path /some/where   临时指定未登记项目
+
+projects:
+
+  # ── 参考实现 / 工作流来源 ─────────────────────────────────────────
+  AutoForge:
+    repo: https://github.com/lidicn/AutoForge
+    path: /data/workspace/audit/src
+    known_stack: "Python / FastAPI / MCP / React；v0.8.0 服务层鉴权"
+    note: "二十轮审计已完成，21 项缺陷全部 still_open。作为工作流的能力基线。"
+    focus: [rmw_consistency, auth_defects, observability_defects, state_defects]
+
+  # ── 目标项目 ─────────────────────────────────────────────────────
+  ADM-auditkit:
+    repo: https://github.com/lidicn/ADM-auditkit
+    path: /data/workspace/repos/ADM-auditkit
+    known_stack: "Python LLM 评估框架；5 阶段流水线 Dataset→Adapter→Model→Metrics→RunResult"
+    note: >
+      模块密集（adapter/annotator/evaluator/scorers/scoring/redteam/scenarios 等）。
+      评估类框架的特有风险：外部模型调用无超时、评分逻辑浮点比较、
+      缓存键不含模型版本（换模型仍读旧结果）、报告生成部分失败不留痕。
+    focus: [input_defects, time_numeric_defects, serialization_defects,
+            observability_defects, consistency_defects]
+
+  doubao-butler:
+    repo: https://github.com/lidicn/doubao-butler
+    path: /data/workspace/repos/doubao-butler
+    known_stack: "未知 —— 公开资料未获取，按通用化处理"
+    note: >
+      技术栈未确认。首次执行必须先跑 `auditkit profile` 探测真实语言，
+      再据此判断是否适用 Python AST 分析器（不适用时以 generic_text 兜底）。
+      未探测前不得假定其为 Python 项目。
+    focus: []
+
+  memory-agent:
+    repo: https://github.com/lidicn/memory-agent
+    path: /data/workspace/repos/memory-agent
+    known_stack: >
+      Python + Docker Compose；Chainlit + LangGraph + Qdrant + PostgreSQL
+      + embedding-service；OpenAI 兼容端点；读 HomeAssistant 历史时序数据
+    note: >
+      多容器 + 向量库 + 长期记忆写入。特有风险：向量检索无超时/无降级、
+      记忆写入无界增长、时序数据窗口用墙上时钟、
+      外部 LLM 端点失败时 LangGraph 节点状态不一致、compose 特权/网络配置。
+    focus: [boundary_defects, time_numeric_defects, concurrency_defects,
+            observability_defects, errorhandling_defects]
+
+defaults:
+  skip_dirs: [.git, __pycache__, node_modules, .venv, venv, dist, build,
+              vendor, target, site-packages]
+  analyzers: all
+  selftest_before_round: true
