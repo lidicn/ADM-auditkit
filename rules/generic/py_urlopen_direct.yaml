@@ -1,0 +1,42 @@
+id: py.urlopen_direct
+name: 直连 urlopen 出站
+description: >
+  直接调用 urllib.request.urlopen 发起出站请求。urlopen 默认跟随 3xx 重定向且
+  不对重定向目标重新校验白名单，因此绕过项目自建的出站护栏即等于放弃 SSRF 防护。
+  本规则的判据是「调用末段名为 urlopen」，相比 bandit B310 能覆盖
+  `opener or urllib.request.urlopen` 这类把函数对象当值传递的间接写法
+  —— 该写法在 AutoForge 第十五轮审计中确证为 F15（af_live:235、af_registry:321）。
+applies_to: []
+mode: static_ast
+severity: medium
+status: active
+version: "1.0.0"
+match:
+  call: [urlopen]
+tests:
+  dirty:
+    - name: qualified-call
+      code: |
+        import urllib.request
+        resp = urllib.request.urlopen(req)
+    - name: from-import-call
+      code: |
+        from urllib.request import urlopen
+        resp = urlopen(url)
+    - name: nested-in-call
+      code: |
+        import urllib.request, json
+        data = json.loads(urllib.request.urlopen(url).read())
+  clean:
+    - name: requests-get
+      code: |
+        import requests
+        resp = requests.get(url, timeout=5)
+    - name: custom-wrapper
+      code: |
+        resp = self._guarded_open(url)
+    - name: urlopen-in-docstring
+      code: |
+        def f():
+            """调用 urlopen() 是不安全的，请用 _guarded_open。"""
+            return self._guarded_open(url)

@@ -1,0 +1,56 @@
+id: py.except_broad_swallow
+name: 宽捕 Exception 且静默降级
+description: >
+  捕获 Exception / BaseException 这一宽泛异常类型。它本身不是缺陷，但它是
+  「读失败被当成没有数据」（CWE-390）这一族的**必要前兆**：AutoForge 二十轮审计
+  确证的 6 项缺陷（F8/F9/F10/F11/F12/F13）全部含有此形态 —— 读侧宽捕后静默
+  返回空值/空容器，写侧随即全量覆盖，导致用户数据被永久清空或守卫被绕过。
+  判定是否构成真缺陷，需结合写侧是否为全量覆盖、或调用方是否以「取不到即放行」
+  的语义使用它（见 rules/project/AutoForge 下的 DO / FO 系列说明）。
+  注意：本规则是**信号型**规则，命中不等于缺陷。实测在 AutoForge（100 个 py 文件）
+  命中 35 个文件，噪音偏高 —— 需配合写侧是否为全量覆盖来分诊，不建议单独作为缺陷
+  报告依据。定位为 low 是为了不挤占真正缺陷的可见度。
+applies_to: []
+mode: static_ast
+severity: low
+status: active
+version: "1.0.0"
+match:
+  type: [ExceptHandler]
+  regex: ["except\\s+(Exception|BaseException)\\s*:"]
+tests:
+  dirty:
+    - name: broad-except-return-empty
+      code: |
+        def _load(self):
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+    - name: broad-except-void-return
+      code: |
+        def _load_codes(self):
+            try:
+                self._codes = json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                return
+    - name: base-except-handler
+      code: |
+        try:
+            run()
+        except BaseException:
+            pass
+  clean:
+    - name: narrow-except
+      code: |
+        def _load(self):
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise StateCorrupt(str(exc)) from exc
+    - name: narrow-conflict-handler
+      code: |
+        try:
+            n = store.save(graph, name)
+        except ArchiveNameConflict:
+            return None
