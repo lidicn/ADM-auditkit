@@ -2,7 +2,7 @@
 """示例规则 —— 把既有分析器能力改造成规则插件（示范迁移路径）。
 
 迁移三步（本文件就是模板）：
-  1. **不复制** core/analyzers 的逻辑：用 importlib 包装 core/analyzers/_common.py
+  1. **不复制** legacy/analyzers 的逻辑：用 importlib 包装 legacy/analyzers/_common.py
      的共享判据（container_inits / has_removal_path / is_bounded）。
   2. 把「分析器脚本 + 目录扫描」收缩成 run(tree, profile, adapter) -> list[Finding]：
      只处理一棵 AST，文件遍历交给 L1 引擎（engine/static_ast_mode.py）。
@@ -21,8 +21,8 @@ _GROWTH_RE = r"self\.{name}\.(append|extend|add|insert|update|setdefault)\b"
 
 
 def _load_common():
-    """包装 core/analyzers/_common.py —— 复用判据，零复制。"""
-    path = Path(__file__).resolve().parents[2] / "core" / "analyzers" / "_common.py"
+    """包装 legacy/analyzers/_common.py —— 复用判据，零复制。"""
+    path = Path(__file__).resolve().parents[2] / "legacy" / "analyzers" / "_common.py"
     if not path.exists():
         raise RuntimeError(f"缺少共享判据模块: {path}")
     spec = importlib.util.spec_from_file_location("auditkit_core_analyzers_common", path)

@@ -322,6 +322,71 @@ def cmd_rules(args) -> int:
     return 2
 
 
+def cmd_propose(args) -> int:
+    """Phase 4: 元宝迭代通道 —— 生成/列出/查看标准化变更提案包。"""
+    from engine.propose import create_proposal, list_proposals, show_proposal, PROPOSALS_DIR
+
+    if args.propose_cmd == "create":
+        if not args.type or not args.name:
+            print("错误: propose create 需要 --type 和 --name")
+            return 2
+        try:
+            proposal_dir = create_proposal(
+                ptype=args.type,
+                name=args.name,
+                title=args.title,
+                summary=args.summary or "",
+                scope=args.scope or "",
+                risk=args.risk,
+                verify_cmd=args.verify_cmd,
+                author=args.author or "yuanbao",
+            )
+        except ValueError as e:
+            print(f"错误: {e}")
+            return 2
+        print(f"提案包已生成: {proposal_dir}")
+        print(f"  CHANGE.yaml: {proposal_dir / 'CHANGE.yaml'}")
+        if (proposal_dir / "files").exists():
+            file_count = sum(1 for _ in (proposal_dir / "files").rglob("*") if _.is_file())
+            print(f"  files/: {file_count} 个变更文件")
+        if (proposal_dir / "evidence").exists():
+            ev_count = sum(1 for _ in (proposal_dir / "evidence").rglob("*") if _.is_file())
+            print(f"  evidence/: {ev_count} 个验证证据")
+        print(f"\n下一步: 把提案包发给维护者审核，维护者运行 CHANGE.yaml 中的 verify_cmd 后合入")
+        return 0
+
+    elif args.propose_cmd == "list":
+        proposals = list_proposals()
+        if not proposals:
+            print(f"暂无提案包（目录: {PROPOSALS_DIR}）")
+            return 0
+        print(f"提案包列表（共 {len(proposals)} 个）:")
+        for p in proposals:
+            print(f"  {p.name}")
+        return 0
+
+    elif args.propose_cmd == "show":
+        if not args.name:
+            print("错误: propose show 需要 --name（提案包目录名）")
+            return 2
+        proposal_dir = PROPOSALS_DIR / args.name
+        if not proposal_dir.exists():
+            # 尝试模糊匹配
+            matches = [p for p in PROPOSALS_DIR.iterdir() if args.name in p.name] if PROPOSALS_DIR.exists() else []
+            if len(matches) == 1:
+                proposal_dir = matches[0]
+            else:
+                print(f"错误: 提案包不存在: {args.name}")
+                if matches:
+                    print(f"  可能匹配: {[m.name for m in matches]}")
+                return 1
+        print(show_proposal(proposal_dir))
+        return 0
+
+    print(f"未知 propose 子命令: {args.propose_cmd}")
+    return 2
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="auditkit", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -369,6 +434,24 @@ def main() -> int:
     p7t.add_argument("rule_id")
     p7t.add_argument("--json", action="store_true")
     p7.set_defaults(func=cmd_rules)
+
+    p8 = sub.add_parser("propose", help="元宝迭代通道：生成/列出/查看标准化变更提案包（Phase 4 新增）")
+    p8sub = p8.add_subparsers(dest="propose_cmd", required=True)
+    p8c = p8sub.add_parser("create", help="生成变更提案包（自动收集改动文件+跑测试+生成CHANGE.yaml）")
+    p8c.add_argument("--type", required=True, choices=["rule", "engine", "profile"],
+                     help="提案类型：rule=规则变更, engine=引擎/模式变更, profile=项目适配变更")
+    p8c.add_argument("--name", required=True, help="提案名称（用于目录名，如 py_new_rule）")
+    p8c.add_argument("--title", help="提案标题（默认用 name）")
+    p8c.add_argument("--summary", help="变更摘要：改了什么、为什么改")
+    p8c.add_argument("--scope", help="影响范围（默认根据类型推断）")
+    p8c.add_argument("--risk", choices=["low", "medium", "high"],
+                     help="风险等级（默认 rule=low, engine=medium, profile=low）")
+    p8c.add_argument("--verify-cmd", help="验证命令（默认跑测试+规则自测）")
+    p8c.add_argument("--author", default="yuanbao", help="作者（默认 yuanbao）")
+    p8l = p8sub.add_parser("list", help="列出所有提案包")
+    p8s = p8sub.add_parser("show", help="查看某个提案包摘要")
+    p8s.add_argument("--name", required=True, help="提案包目录名（支持模糊匹配）")
+    p8.set_defaults(func=cmd_propose)
 
     args = ap.parse_args()
     return args.func(args)

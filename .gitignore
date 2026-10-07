@@ -15,12 +15,18 @@ Thumbs.db
 # 审计结果（不提交大文件）
 projects/*/round-*/findings/*.json
 projects/*/round-*/report.md
+projects/*/round-*/all-findings.json
+projects/*/round-*/profile.json
+projects/*/round-*/summary.json
 *.sarif
 *.graphml
 
 # 临时
 tmp/
 *.bak
+
+# 元宝迭代提案包（不提交，由维护者审核后手动合入）
+proposals/
 
 # 二进制产物
 *.zip

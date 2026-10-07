@@ -28,7 +28,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ANALYZERS = HERE / "analyzers"
-LANG = HERE / "lang"
+LANG = HERE.parent / "core" / "lang"
 
 # 分析器 → 适用语言。Python AST 分析器只对 python 生效。
 ANALYZER_LANGS = {p.stem: "python" for p in sorted(ANALYZERS.glob("*_defects.py"))}

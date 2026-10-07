@@ -29,7 +29,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 LIB = Path(__import__("os").environ.get("AUDITKIT_ANALYZERS")
-           or (ROOT.parent / "core" / "analyzers"))
+           or (ROOT.parent / "legacy" / "analyzers"))
 if not LIB.exists():                       # 兼容 AF 原布局
     LIB = ROOT.parent / "workflow" / "lib"
 CASES = ROOT / "cases"
@@ -62,7 +62,7 @@ ANALYZERS = [
     ("generic_text", []),
 ]
 
-#: 不在 core/analyzers 下的分析器 → 显式路径
+#: 不在 legacy/analyzers 下的分析器 → 显式路径
 EXTRA_SCRIPTS = {
     "generic_text": ROOT.parent / "core" / "lang" / "generic_text.py",
 }

@@ -4,8 +4,8 @@
 职责：
   1. 收集作用域内 .py 文件（包根 + adapter 附加扫描根 + 画像门禁目录）
   2. 解析 AST，逐文件逐规则执行 L3 规则（mode == "static_ast"）
-  3. AnalyzerBridge **import 包装** core/registry.py 的既有分析器能力，
-     把旧 findings 归一成 Finding —— 不复制任何 core/analyzers 代码（验收 12）
+  3. AnalyzerBridge **import 包装** legacy/registry.py 的既有分析器能力，
+     把旧 findings 归一成 Finding —— 不复制任何 legacy/analyzers 代码（验收 12）
 
 失败语义（本模式内）：
   - 单文件语法错误 → 跳过该文件，计入 diagnostics（fail-open）
@@ -22,18 +22,18 @@ from .profile import DEFAULT_SKIP_DIRS, as_profile
 
 
 class AnalyzerBridge:
-    """core/registry.py 的 import 包装：复用 run_analyzer / probe_tools。"""
+    """legacy/registry.py 的 import 包装：复用 run_analyzer / probe_tools。"""
 
     def __init__(self, core_dir=None):
-        self.core_dir = Path(core_dir) if core_dir else Path(__file__).resolve().parents[1] / "core"
+        self.legacy_dir = Path(core_dir) if core_dir else Path(__file__).resolve().parents[1] / "legacy"
         self._mod = None
 
     def registry_module(self):
         if self._mod is None:
-            path = self.core_dir / "registry.py"
+            path = self.legacy_dir / "registry.py"
             if not path.exists():
-                raise FileNotFoundError(f"未找到既有分析器注册表: {path}")
-            spec = importlib.util.spec_from_file_location("auditkit_core_registry", path)
+                raise FileNotFoundError(f"未找到 legacy 分析器注册表: {path}")
+            spec = importlib.util.spec_from_file_location("auditkit_legacy_registry", path)
             if spec is None or spec.loader is None:
                 raise ImportError(f"无法加载 {path}")
             mod = importlib.util.module_from_spec(spec)
@@ -42,7 +42,7 @@ class AnalyzerBridge:
         return self._mod
 
     def analyzer_scripts(self) -> list:
-        adir = self.core_dir / "analyzers"
+        adir = self.legacy_dir / "analyzers"
         return sorted(p for p in adir.glob("*.py") if not p.name.startswith("_"))
 
     def probe(self) -> dict:
@@ -133,7 +133,7 @@ class StaticAstMode(BaseAuditMode):
         return findings
 
     def run_legacy(self, repo_path, profile, adapter) -> list:
-        """包装既有分析器（core/registry.run_analyzer），零代码复制。"""
+        """包装既有分析器（legacy/registry.run_analyzer），零代码复制。"""
         out: list = []
         try:
             scripts = self.bridge.analyzer_scripts()
@@ -141,7 +141,7 @@ class StaticAstMode(BaseAuditMode):
             self.diagnostics.append(f"既有分析器不可用: {e}")
             return out
         if not scripts:
-            self.diagnostics.append("既有分析器不可用: core/analyzers 为空")
+            self.diagnostics.append("既有分析器不可用: legacy/analyzers 为空")
             return out
         roots = self.scope_roots(repo_path, profile, adapter) or [Path(repo_path)]
         for script in scripts:

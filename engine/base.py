@@ -163,11 +163,11 @@ def rule_summary(rule) -> dict:
     }
 
 
-# ── AST 便利函数（引擎层公共件；core/analyzers/_common.py 保持不动）────────
+# ── AST 便利函数（引擎层公共件；legacy/analyzers/_common.py 保持不动）────────
 def call_chain(node: ast.Call) -> str:
     """还原调用链：`os.replace(...)` → `os.replace`；`(p/"x").write_text()` → `write_text`。
 
-    与 core/analyzers/_common._chain 语义一致（保留已收集的属性链，不返回空串）。
+    与 legacy/analyzers/_common._chain 语义一致（保留已收集的属性链，不返回空串）。
     两份并存是 §2.2 约束的结果：core/* 不许改；Phase 2 把 core 侧改为复用本函数。
     """
     func = getattr(node, "func", None)

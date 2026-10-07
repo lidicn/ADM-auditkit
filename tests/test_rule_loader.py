@@ -341,7 +341,7 @@ def test_real_rules_tree_example_rule_validates():
     report = loader.load_rules([ROOT / "rules"])
     rule = report.get("py.unbounded_container")
     assert rule is not None, report.summary()
-    core_common = ROOT / "core" / "analyzers" / "_common.py"
+    core_common = ROOT / "legacy" / "analyzers" / "_common.py"
     if core_common.exists():
         assert rule.status in ("active", "testing")
         assert all(r.ok for r in getattr(rule, "test_results", []))

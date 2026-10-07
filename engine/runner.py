@@ -3,7 +3,7 @@
 
 替代 core/registry.py 的 subprocess 调用，直接在 Python 内运行：
   1. L3 规则（rules/generic + rules/project）
-  2. 旧分析器（通过 StaticAstMode.run_legacy → AnalyzerBridge → registry.run_analyzer）
+  2. 旧分析器（可选，通过 StaticAstMode.run_legacy → AnalyzerBridge → legacy/registry.py）
   3. 跨语言通用层（generic_text.py，保持原 subprocess 方式）
 
 输出格式与 registry.py 完全兼容：
@@ -68,7 +68,8 @@ def run_generic_text(repo_root: Path) -> list[Finding]:
 
 
 def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
-              extra_roots: list[Path] | None = None) -> dict:
+              extra_roots: list[Path] | None = None,
+              include_legacy: bool = False) -> dict:
     """执行一轮审计，写入兼容格式的产物。
 
     Args:
@@ -76,6 +77,7 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
         outdir: 产物输出目录（findings/ 会创建在这里）
         profile_path: 画像 JSON 路径（可选）
         extra_roots: 附加扫描根（可选）
+        include_legacy: 是否同时运行 legacy/ 下的旧分析器（默认 False，只跑 rules/ 新规则）
 
     Returns:
         summary dict（兼容 registry.py 的 summary 格式）
@@ -132,23 +134,24 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
                 continue
             new_rule_findings += [f for f in out if isinstance(f, Finding)]
 
-    # 4) 运行 legacy 旧分析器（逐个脚本，按脚本名分组 —— 与 registry.py 完全一致）
-    bridge = mode.bridge
+    # 4) 运行 legacy 旧分析器（可选，默认关闭；逐个脚本，按脚本名分组）
     legacy_by_analyzer: dict[str, list[Finding]] = {}
-    try:
-        scripts = bridge.analyzer_scripts()
-    except Exception as e:
-        mode.diagnostics.append(f"legacy 分析器不可用: {e}")
-        scripts = []
-    roots = mode.scope_roots(str(repo_path), prof, adapter) or [repo_path]
-    for script in scripts:
-        analyzer_name = script.stem
-        for root in roots:
-            try:
-                fs = bridge.run_script(script, root)
-                legacy_by_analyzer.setdefault(analyzer_name, []).extend(fs)
-            except Exception as e:
-                mode.diagnostics.append(f"{analyzer_name} @ {root} 失败: {e}")
+    if include_legacy:
+        bridge = mode.bridge
+        try:
+            scripts = bridge.analyzer_scripts()
+        except Exception as e:
+            mode.diagnostics.append(f"legacy 分析器不可用: {e}")
+            scripts = []
+        roots = mode.scope_roots(str(repo_path), prof, adapter) or [repo_path]
+        for script in scripts:
+            analyzer_name = script.stem
+            for root in roots:
+                try:
+                    fs = bridge.run_script(script, root)
+                    legacy_by_analyzer.setdefault(analyzer_name, []).extend(fs)
+                except Exception as e:
+                    mode.diagnostics.append(f"{analyzer_name} @ {root} 失败: {e}")
 
     # 5) 运行跨语言通用层
     gt_findings = run_generic_text(repo_path)
