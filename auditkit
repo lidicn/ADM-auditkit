@@ -155,26 +155,37 @@ def cmd_round(args) -> int:
                 pkg = c
                 break
 
-    # 3) 跑分析器
-    print(f"── 分析器分派 → {round_dir / 'findings'}")
+    # 3) 跑分析器（新引擎 Phase 2：engine/runner.py 替代 core/registry.py subprocess）
+    print(f"── 引擎分派 → {round_dir / 'findings'}")
     # 附加扫描根：项目自建的门禁脚本目录（profile 已探测）
-    extra = []
+    extra_roots = []
     for s in profile.get("gates", {}).get("self_check_scripts", []):
         d = path / Path(s).parent
         if d.is_dir():
-            extra += ["--extra-root", str(d)]
+            extra_roots.append(d)
     for c in profile.get("gates", {}).get("ci", []):
         d = path / c["path"]
         if d.is_dir() and d.name == "scripts":
-            extra += ["--extra-root", str(d)]
-    cmd = [sys.executable, str(CORE / "registry.py"), str(pkg),
-           str(round_dir / "findings"), "--profile",
-           str(round_dir / "profile.json")] + sorted(set(extra))
-    # 跨语言层需要仓库根（yaml/docker/sh/TS 在包外）
-    import os as _os
-    env = dict(_os.environ, AUDITKIT_REPO_ROOT=str(path))
-    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    print(r.stdout[-3000:] if r.stdout else r.stderr[-2000:])
+            extra_roots.append(d)
+    try:
+        from engine.runner import run_round
+        summary = run_round(
+            repo_path=path,
+            outdir=round_dir,
+            profile_path=round_dir / "profile.json",
+            extra_roots=extra_roots,
+        )
+        print(f"  分析器 {summary['analyzers_ok']}/{summary['analyzers_total']}  "
+              f"findings {summary['total_findings']}  "
+              f"规则 active={summary['engine']['active_rules']} broken={summary['engine']['broken_rules']}")
+        if summary["engine"]["diagnostics"]:
+            for d in summary["engine"]["diagnostics"][:10]:
+                print(f"  [diag] {d}")
+    except Exception as e:
+        print(f"  [引擎异常] {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
     # 4) 汇总
     agg = CORE / "aggregate.py"

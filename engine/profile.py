@@ -39,10 +39,24 @@ class Languages:
     def from_dict(cls, d) -> "Languages":
         d = d if isinstance(d, dict) else {}
         files = d.get("files")
+        # lines 可能是 int（总行数）或 dict（按语言分行数）
+        lines_val = d.get("lines")
+        if isinstance(lines_val, dict):
+            try:
+                lines_total = sum(int(v) for v in lines_val.values())
+            except (TypeError, ValueError):
+                lines_total = 0
+        elif isinstance(lines_val, (int, float, str)) and lines_val != "":
+            try:
+                lines_total = int(lines_val)
+            except (TypeError, ValueError):
+                lines_total = 0
+        else:
+            lines_total = 0
         return cls(
             primary=str(d.get("primary") or ""),
             files=dict(files) if isinstance(files, dict) else {},
-            lines=int(d.get("lines") or 0),
+            lines=lines_total,
             files_total=int(files) if isinstance(files, int) else 0,
         )
 
