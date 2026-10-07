@@ -1,0 +1,16 @@
+project: memory-agent
+focus:
+  - boundary_defects
+  - time_numeric_defects
+  - concurrency_defects
+  - observability_defects
+  - errorhandling_defects
+focus_rules:
+  - ma.llm_call_no_timeout
+extra_roots: []
+severity_floor: low
+tools:
+  docker: optional
+notes: >
+  多容器 + 向量库 + 长期记忆写入。特有风险：向量检索无超时/无降级、记忆写入无界增长、
+  时序窗口用墙上时钟、外部端点失败时节点状态不一致、compose 特权/网络配置。

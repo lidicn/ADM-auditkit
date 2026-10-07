@@ -1,0 +1,19 @@
+# L2 项目适配 —— AutoForge。只放声明式数据，不放可执行代码（元宝可提交、维护者审核）。
+project: AutoForge
+focus:
+  - rmw_consistency
+  - auth_defects
+  - observability_defects
+  - state_defects
+focus_rules:
+  - af.mcp_tool_no_timeout
+extra_roots:
+  - scripts
+severity_floor: low
+tools:
+  semgrep: optional
+  detect-secrets: optional
+  pip-audit: optional
+notes: >
+  二十轮审计基线：21 项缺陷全部 still_open。真实画像以 auditkit profile 输出为准，
+  profile_cache.json 只是缓存快照。

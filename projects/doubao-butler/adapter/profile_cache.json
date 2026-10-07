@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "status": "unprobed",
+    "generated_by": "",
+    "note": "待 auditkit profile 填充；has_python 不得先行假定为真。"
+  },
+  "languages": {"primary": "", "files": {}, "lines": 0},
+  "frameworks": [],
+  "has_python": false,
+  "python_packages": [],
+  "gates": {"self_check_scripts": [], "ci": []}
+}

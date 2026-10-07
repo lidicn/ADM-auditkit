@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""auditkit —— 多项目审计统一入口。
+
+AF 的工作流是**单项目硬编码**的：路径写死 `src/src/autoforge`，
+只能 `bash af_audit.sh round-020 --force`。要同时维护四个仓库，
+靠记住每个的调用方式不现实。
+
+本 CLI 提供统一入口：
+
+  auditkit profile <path>          探测项目画像（语言/框架/入口/自建门禁）
+  auditkit selftest                跑分析器自检门禁
+  auditkit round <project>         对某项目执行一轮审计
+  auditkit status <project>        查看该项目缺陷台账
+  auditkit list                    列出已配置项目
+  auditkit pack <project>          打包该项目审计产物
+  auditkit rules list              列出已加载规则（id/name/mode/applies_to/status）
+  auditkit rules test <rule_id>    单独跑某规则的 dirty/clean 自检
+
+项目在 config/projects.yaml 里声明；不在表里也能直接用 --path 临时指定。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+CORE = ROOT / "core"
+CONFIG = ROOT / "config"
+PROJECTS_DIR = ROOT / "projects"
+SELFTEST = ROOT / "selftest"
+
+
+def load_projects() -> dict:
+    f = CONFIG / "projects.yaml"
+    if not f.exists():
+        return {}
+    try:
+        import yaml  # type: ignore
+        return yaml.safe_load(f.read_text()) or {}
+    except ImportError:
+        # 无 pyyaml 时做极简解析（只支持本文件用到的扁平结构）
+        out, cur = {}, None
+        for line in f.read_text().splitlines():
+            if not line.strip() or line.strip().startswith("#"):
+                continue
+            if not line.startswith(" ") and line.rstrip().endswith(":"):
+                cur = line.rstrip()[:-1]
+                out[cur] = {}
+            elif cur and ":" in line:
+                k, _, v = line.strip().partition(":")
+                out[cur][k] = v.strip().strip("\"'")
+        return out
+
+
+def cmd_profile(args) -> int:
+    cmd = [sys.executable, str(CORE / "profile.py"), str(Path(args.path).resolve())]
+    if getattr(args, "json", False):
+        cmd.append("--json")
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    print(p.stdout or p.stderr)
+    return p.returncode
+
+
+def cmd_list(args) -> int:
+    pr = load_projects().get("projects", {})
+    rows = [{"name": k, **{kk: vv for kk, vv in v.items() if kk in ("repo", "path", "known_stack")}}
+            for k, v in pr.items()]
+    print(json.dumps(rows, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_selftest(args) -> int:
+    script = SELFTEST / "run_selftest.py"
+    if not script.exists():
+        print("自检套件缺失")
+        return 2
+    argv = [sys.executable, str(script)]
+    if args.update:
+        argv.append("--update")
+    p = subprocess.run(argv, capture_output=True, text=True)
+    try:
+        d = json.loads(p.stdout)
+    except Exception:
+        print(p.stdout, p.stderr)
+        return 1
+    print("自检结果:", "通过" if d.get("ok") else "失败")
+    print("分析器数:", d.get("analyzers"))
+    if d.get("dirty_hits"):
+        zero = [k for k, v in d["dirty_hits"].items() if v == 0]
+        print("❌ 0 命中（规则可能失效）:", zero or "无")
+    if d.get("clean_hits"):
+        print("clean 样本命中:", {k: v for k, v in d["clean_hits"].items() if v} or "无")
+    for f in d.get("failures", []):
+        print("  ", f)
+    return 0 if d.get("ok") else 1
+
+
+def _resolve(args) -> tuple[str, Path]:
+    if getattr(args, "path", None):
+        # --path 优先级高于位置参数名（否则位置参数被当成路径，找不到就误报）
+        return Path(args.name_or_path).name, Path(args.path).resolve()
+    pr = load_projects()
+    cfg = pr.get("projects", {}).get(args.name_or_path)
+    if not cfg:
+        sys.exit(f"未找到项目 {args.name_or_path}；可用: "
+                 f"{list(pr.get('projects', {}))} 或用 --path 直接指定")
+    return args.name_or_path, Path(cfg.get("path", "")).expanduser().resolve()
+
+
+def cmd_round(args) -> int:
+    name, path = _resolve(args)
+    if not path.exists():
+        print(f"[warn] 本地路径不存在: {path}")
+        print("      仓库未克隆时无法审计。请先 clone，或用 --path 指向已有副本。")
+        return 2
+    round_dir = PROJECTS_DIR / name / f"round-{args.round:03d}"
+    round_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1) 画像
+    print(f"── 画像探测 {name}")
+    pf = subprocess.run([sys.executable, str(CORE / "profile.py"), str(path), "--json"],
+                        capture_output=True, text=True)
+    try:
+        profile = json.loads(pf.stdout)
+    except Exception:
+        # 兜底：profile 若把人类可读摘要混进 stdout，取最后一段 {...}
+        s = pf.stdout
+        i, j = s.rfind("{\n"), s.rfind("}")
+        if i >= 0 and j > i:
+            try:
+                profile = json.loads(s[i:j + 1])
+            except Exception:
+                print(pf.stdout[-1500:], pf.stderr[-1500:]); return 1
+        else:
+            print(pf.stdout[-1500:], pf.stderr[-1500:]); return 1
+    (round_dir / "profile.json").write_text(json.dumps(profile, ensure_ascii=False, indent=2))
+    L = profile.get("languages", {})
+    print(f"  主语言 {L.get('primary')}  文件数 {L.get('files')}  行 {L.get('lines')}")
+    print(f"  框架   {', '.join(profile.get('frameworks', [])) or '（未识别）'}")
+
+    # 2) 语言无关的 package root 判定
+    pkg = path
+    ppkgs = profile.get("python_packages") or []
+    if ppkgs:
+        cand = path / ppkgs[0]["path"]
+        if cand.is_dir():
+            pkg = cand                      # 画像指出的主包（模块数最多）
+    if pkg == path:                         # 回退：常见布局
+        for cand_name in ("src", path.name, "app", "lib"):
+            c = path / cand_name
+            if c.is_dir():
+                pkg = c
+                break
+
+    # 3) 跑分析器
+    print(f"── 分析器分派 → {round_dir / 'findings'}")
+    # 附加扫描根：项目自建的门禁脚本目录（profile 已探测）
+    extra = []
+    for s in profile.get("gates", {}).get("self_check_scripts", []):
+        d = path / Path(s).parent
+        if d.is_dir():
+            extra += ["--extra-root", str(d)]
+    for c in profile.get("gates", {}).get("ci", []):
+        d = path / c["path"]
+        if d.is_dir() and d.name == "scripts":
+            extra += ["--extra-root", str(d)]
+    cmd = [sys.executable, str(CORE / "registry.py"), str(pkg),
+           str(round_dir / "findings"), "--profile",
+           str(round_dir / "profile.json")] + sorted(set(extra))
+    # 跨语言层需要仓库根（yaml/docker/sh/TS 在包外）
+    import os as _os
+    env = dict(_os.environ, AUDITKIT_REPO_ROOT=str(path))
+    r = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    print(r.stdout[-3000:] if r.stdout else r.stderr[-2000:])
+
+    # 4) 汇总
+    agg = CORE / "aggregate.py"
+    if agg.exists():
+        subprocess.run([sys.executable, str(agg), str(round_dir / "findings"),
+                        str(round_dir)], capture_output=True, text=True)
+
+    print(f"\n── 完成 → {round_dir}")
+    return 0
+
+
+def cmd_sync(args) -> int:
+    """克隆或更新项目仓库。
+
+    离线沙箱里 git 会失败——这时**明确返回非零并说明**，不静默当成"已是最新"，
+    否则后续审计会拿旧副本或空目录跑出一个看起来正常的空结果。
+    """
+    pr = load_projects().get("projects", {})
+    names = [args.name] if getattr(args, "name", None) else list(pr)
+    rc = 0
+    for n in names:
+        info = pr.get(n)
+        if not info:
+            print(f"[skip] 未登记项目: {n}")
+            rc = rc or 1
+            continue
+        path = Path(info.get("path") or (Path("/data/workspace/repos") / n))
+        repo = info.get("repo", "")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if (path / ".git").is_dir():
+            r = subprocess.run(["git", "-C", str(path), "pull", "--ff-only"],
+                               capture_output=True, text=True)
+            print(f"── pull {n}: rc={r.returncode} {(r.stdout or r.stderr).strip()[:160]}")
+            rc = rc or r.returncode
+            continue
+        if not repo:
+            print(f"[skip] {n} 未配置 repo 地址，且本地无副本: {path}")
+            rc = rc or 2
+            continue
+        r = subprocess.run(["git", "clone", "--depth", "1", repo, str(path)],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            print(f"── clone {n} → {path}  OK")
+        else:
+            print(f"── clone {n} 失败（离线/无凭证/仓库不存在）rc={r.returncode}")
+            print(f"   {(r.stderr or r.stdout).strip()[:300]}")
+            print(f"   无法获取源码 ⇒ 无法审计。请手工放置副本后重跑，或用 --path 指向已有副本。")
+            rc = rc or r.returncode
+    return rc
+
+
+def cmd_status(args) -> int:
+    name, path = _resolve(args)
+    bf = PROJECTS_DIR / name / "baseline" / "bugs.json"
+    if not bf.exists():
+        print(f"{name}: 尚无台账（{bf}）")
+        return 0
+    d = json.loads(bf.read_text())
+    for b in d.get("bugs", []):
+        print(f"  {b['id']:<8} {b.get('severity','?'):<7} {b.get('title','')[:70]}")
+    print(f"共 {len(d.get('bugs', []))} 项")
+    return 0
+
+
+def cmd_pack(args) -> int:
+    name, path = _resolve(args)
+    import zipfile
+    src = PROJECTS_DIR / name
+    if not src.exists():
+        print(f"无产物: {src}")
+        return 2
+    out = ROOT / f"{name}-audit.zip"
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for p in src.rglob("*"):
+            if p.is_file() and "__pycache__" not in p.parts:
+                z.write(p, p.relative_to(src.parent))
+    print(f"已打包 → {out}")
+    return 0
+
+
+# ── 在 cmd_pack 之后新增 ────────────────────────────────────────────────
+def _engine_loader():
+    """惰性加载新引擎规则层 —— 缺失时只影响 `rules` 子命令，不影响旧命令。"""
+    import importlib
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    return importlib.import_module("engine.loader")
+
+
+def cmd_rules(args) -> int:
+    """规则层入口（Phase 1 新增）：rules list / rules test。"""
+    loader = _engine_loader()
+    if args.rules_cmd == "list":
+        report = loader.load_rules()
+        rows = []
+        want = getattr(args, "project", None)
+        for rule in list(report.registry) + list(report.broken.values()):
+            if want and rule.applies_to and want not in rule.applies_to:
+                continue
+            if not getattr(args, "all", False) and rule.status not in ("active", "testing"):
+                continue
+            rows.append({"id": rule.id, "name": rule.name, "mode": rule.mode,
+                         "applies_to": rule.applies_to, "status": rule.status,
+                         "severity": rule.severity, "version": rule.version})
+        rows.sort(key=lambda r: r["id"])
+        if getattr(args, "json", False):
+            print(json.dumps(rows, ensure_ascii=False, indent=2))
+        else:
+            print(f"{'id':<32} {'mode':<12} {'status':<10} {'severity':<9} "
+                  f"{'applies_to':<22} name")
+            for r in rows:
+                ap = ",".join(r["applies_to"]) or "*"
+                print(f"{r['id']:<32} {r['mode']:<12} {r['status']:<10} "
+                      f"{r['severity']:<9} {ap:<22} {r['name']}")
+            print(f"共 {len(rows)} 条（loaded={len(report.registry)} broken={len(report.broken)}）")
+        return 0
+    if args.rules_cmd == "test":
+        rid = args.rule_id
+        try:
+            rule, results = loader.test_rule_by_id(rid)
+        except KeyError:
+            report = loader.load_rules()
+            print(f"未找到规则 {rid}；可用: {report.active_ids() or '（无）'}")
+            return 2
+        print(f"规则 {rule.id}（{rule.name}）自检：")
+        ok_all = True
+        for r in results:
+            mark = "PASS" if r.ok else "FAIL"
+            ok_all = ok_all and r.ok
+            print(f"  [{mark}] {r.kind:<5} {r.name:<20} hits={r.hits} {r.message}")
+        print("结论:", "通过" if ok_all else "不通过（规则将被标 broken，不参与审计）")
+        return 0 if ok_all else 1
+    print(f"未知 rules 子命令: {args.rules_cmd}")
+    return 2
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="auditkit", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p1 = sub.add_parser("profile", help="探测项目画像")
+    p1.add_argument("path")
+    p1.add_argument("--json", action="store_true", help="只输出 JSON")
+    p1.set_defaults(func=cmd_profile)
+
+    ps = sub.add_parser("sync", help="克隆/更新项目仓库（离线会明确失败）")
+    ps.add_argument("name", nargs="?")
+    ps.set_defaults(func=cmd_sync)
+
+    p2 = sub.add_parser("list", help="列出已配置项目")
+    p2.set_defaults(func=cmd_list)
+
+    p3 = sub.add_parser("selftest", help="跑分析器自检门禁")
+    p3.add_argument("--update", action="store_true")
+    p3.set_defaults(func=cmd_selftest)
+
+    p4 = sub.add_parser("round", help="对某项目执行一轮审计")
+    p4.add_argument("name_or_path")
+    p4.add_argument("--path", help="直接指定本地路径（忽略配置表）")
+    p4.add_argument("--round", type=int, default=1)
+    p4.set_defaults(func=cmd_round)
+
+    p5 = sub.add_parser("status", help="查看项目缺陷台账")
+    p5.add_argument("name_or_path")
+    p5.add_argument("--path")
+    p5.set_defaults(func=cmd_status)
+
+    p6 = sub.add_parser("pack", help="打包项目审计产物")
+    p6.add_argument("name_or_path")
+    p6.add_argument("--path")
+    p6.set_defaults(func=cmd_pack)
+
+    p7 = sub.add_parser("rules", help="规则层：列出/自测 L3 规则（Phase 1 新增）")
+    p7sub = p7.add_subparsers(dest="rules_cmd", required=True)
+    p7l = p7sub.add_parser("list", help="列出已加载规则（id/name/mode/applies_to/status）")
+    p7l.add_argument("--project", help="按 applies_to 过滤显示")
+    p7l.add_argument("--all", action="store_true", help="包含 draft/deprecated/broken")
+    p7l.add_argument("--json", action="store_true")
+    p7t = p7sub.add_parser("test", help="单独跑某规则的 dirty/clean 自检")
+    p7t.add_argument("rule_id")
+    p7t.add_argument("--json", action="store_true")
+    p7.set_defaults(func=cmd_rules)
+
+    args = ap.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

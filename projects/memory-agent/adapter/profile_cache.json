@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "status": "unprobed",
+    "generated_by": "",
+    "note": "known_stack 来自登记表（人工参考），真实判定以 auditkit profile 为准。"
+  },
+  "languages": {"primary": "", "files": {}, "lines": 0},
+  "frameworks": [],
+  "has_python": true,
+  "python_packages": [],
+  "gates": {"self_check_scripts": [], "ci": []}
+}

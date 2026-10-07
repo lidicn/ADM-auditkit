@@ -1,0 +1,23 @@
+# YAML 声明式规则示例：动态代码执行检测（eval/exec）
+# 这是 L3 规则层的 YAML 形态示范：简单模式匹配首选 YAML，不需要写 Python。
+id: py.dynamic_code_exec
+name: 动态代码执行
+description: 使用 eval/exec 执行动态构造的代码，可能导致任意代码执行漏洞
+applies_to: []
+mode: static_ast
+severity: high
+status: active
+version: "1.0.0"
+match:
+  call: [eval, exec]
+tests:
+  dirty:
+    - name: eval-call
+      code: result = eval(user_input)
+    - name: exec-call
+      code: exec(dynamic_code)
+  clean:
+    - name: safe-eval-variable
+      code: eval_fn = my_custom_eval
+    - name: math-eval-method
+      code: result = obj.evaluate(expr)

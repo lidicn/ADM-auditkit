@@ -1,0 +1,8 @@
+project: doubao-butler
+focus: []
+focus_rules: []
+extra_roots: []
+severity_floor: low
+tools: {}
+notes: >
+  技术栈未探测。先跑 auditkit profile，再决定规则形态；在此之前不加任何语言特定规则。

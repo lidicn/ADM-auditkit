@@ -1,0 +1,12 @@
+{
+  "meta": {
+    "status": "unprobed",
+    "generated_by": "",
+    "note": "骨架缓存：首次 auditkit round 会写入真实画像；此文件不作为事实来源。"
+  },
+  "languages": {"primary": "", "files": {}, "lines": 0},
+  "frameworks": [],
+  "has_python": true,
+  "python_packages": [],
+  "gates": {"self_check_scripts": [], "ci": []}
+}
