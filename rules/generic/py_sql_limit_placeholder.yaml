@@ -1,0 +1,49 @@
+# py.sql_limit_placeholder —— SQL LIMIT 使用占位符下推，调用点未见钳制
+#
+# 来源：memory-agent MA-07 / MA-09（确证 High）
+#   SQLite 中 `LIMIT -1` = **无上限**（不是"0 条"也不是报错）— lesson 81
+#   `?limit=abc` → 路由 500；`?limit=-1` → 300 条全表
+#
+# 为什么用 YAML 而不是 Python 插件（指南 §3「能 YAML 就不 Python」）：
+#   这是一个纯文本形状判据，无 AST 语义需求，正则即可表达。
+#   但必须诚实标注：YAML/regex **无法判断调用点是否已钳制**，
+#   故本规则只出"候选"，实际判定需人工或 Python 维度 numeric 补充。
+id: py.sql_limit_placeholder
+name: SQL LIMIT 使用占位符下推
+description: >-
+  SQL 中出现 LIMIT ? 占位符，外部数值可直达 LIMIT。
+  SQLite 中负值为**无上限**，非数字会抛错。
+  本规则仅标记候选，钳制与否须人工确认调用点。
+applies_to: []
+mode: static_ast
+severity: medium
+status: active
+version: 1.0.0
+match:
+  regex: ['(?i)\bLIMIT\s+\?']
+tests:
+  dirty:
+    - name: limit-placeholder
+      code: |
+        def query_events(conn, limit):
+            return conn.execute("SELECT * FROM events LIMIT ?", (limit,))
+    - name: limit-placeholder-offset
+      code: |
+        def page(conn, limit, offset):
+            return conn.execute("SELECT * FROM t LIMIT ? OFFSET ?", (limit, offset))
+  clean:
+    - name: literal-limit
+      code: |
+        def query_recent(conn):
+            return conn.execute("SELECT * FROM events LIMIT 100")
+    - name: no-limit-clause
+      code: |
+        def query_all(conn):
+            return conn.execute("SELECT * FROM events ORDER BY ts DESC")
+    - name: parameterized-where-not-limit
+      code: |
+        def by_day(conn, day):
+            return conn.execute("SELECT * FROM events WHERE day = ?", (day,))
+# 已知局限（如实标注）：正则无法判断调用点是否已钳制。
+# 已钳制的 `LIMIT ?` 仍会命中 ⇒ 本规则只出候选，
+# 精确判定请用 Python 维度 numeric（会追到形参是否被 clamp）。
