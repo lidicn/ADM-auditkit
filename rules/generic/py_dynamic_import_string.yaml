@@ -1,0 +1,50 @@
+id: py.dynamic_import_string
+name: 字符串形式的动态导入
+description: >
+  以字符串形式声明模块清单，再用 `__import__(mod)` 或
+  `importlib.import_module(mod)` 逐个导入。AST 里没有 Import/ImportFrom 节点，
+  只有字符串字面量 ⇒ **所有基于 Import 节点的静态分析都会漏掉它**。
+
+  来源：doubao-butler 第十七轮确证缺陷 D19。该项目的装配自检脚本
+  `scripts/smoke_import.py` 用这种方式列出待检模块清单，其中
+  `butler.tts.edge_tts` 与 `butler.tts.nowvoice_tts` 两个模块**根本不存在**
+  —— 而它们是整个包（14 个文件）缺失的一部分，根因是 .gitignore 第 3 行
+  `tts/` 无前导斜杠，把 `butler/tts/` 整个包一起忽略了。
+
+  这类写法最常出现在**自检/冒烟脚本与插件加载器**里 —— 恰恰是最该验证
+  "这些模块到底存不存在"的地方。漏掉它，等于漏掉最容易发现装配缺失的位置。
+
+  **已知假阳性（维护者注）**：纯 call 判据无法区分「导入字面量清单」（危险）
+  与「导入单个动态名」（正常，如 importlib.import_module(__name__)）。
+  后者也会命中本规则，需人工分诊。此为引擎判据缺口（gap-4：值来源追踪），
+  待引擎补齐后可消除。当前定位为信号型规则（low），命中后人工确认实参
+  是否来自字面量模块清单。
+applies_to: []
+mode: static_ast
+severity: low
+status: active
+version: "1.0.0"
+match:
+  call: [__import__, import_module]
+tests:
+  dirty:
+    - name: bare-list-import
+      code: |
+        MODULES = ["app.core.db", "app.core.missing_pkg"]
+        for mod in MODULES:
+            __import__(mod)
+    - name: importlib-module
+      code: |
+        import importlib
+        for name in ["pkg.a", "pkg.nonexistent"]:
+            importlib.import_module(name)
+  clean:
+    - name: static-import-only
+      code: |
+        import os
+        import json
+        from pathlib import Path
+    - name: importlib-in-string
+      code: |
+        # 文档里提到 importlib.import_module 的用法，但代码没调用
+        DOC = "用 importlib.import_module(name) 加载插件"
