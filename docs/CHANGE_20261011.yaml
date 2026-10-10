@@ -1,0 +1,101 @@
+proposal_id: 20261011-auditkit-workflow
+title: "审计工作流：判据的『局部性』边界与负向测试"
+date: 2026-10-11
+author: "ADM 规则审计 agent（AutoForge 第二期，20 轮）"
+target_repo: lidicn/ADM-auditkit
+type: workflow
+severity_note: >
+  本提案不新增规则，全部是**判据修正**。核心论点：静态规则的判据天生是「局部」的
+  （只看一个函数/一个节点的形态），而缺陷的成立条件往往是「跨函数/跨模块」的。
+  第二期 20 轮里，连续 6 轮的实质产出都是判据修正而非新缺陷，且这些修正全部是
+  同一类根因的不同表现。
+
+recommendations:
+  - id: R1
+    title: "给「前提型」message 配判据，或改写 message"
+    body: >
+      多条规则的 message 自带一个它自己从不验证的前提。
+      例：SER-01「**若**该类需从磁盘/网络恢复」；IN-03「**若**该值来自外部」。
+      实测后果：SER-01 11 条全假阳性，IN-03 44 条里只有 1 条真外部可达。
+    evidence: ["W146", "W147"]
+    action: "要么实现前提判据，要么把前提从 message 里删掉（不要写在那里却不判断）"
+
+  - id: R2
+    title: "区分「有没有防护」与「防护的判据对不对」"
+    body: >
+      这是两个正交维度。AF19（SPA fallback 目录穿越）的防护看起来完备：
+      .resolve() + is_file() + startswith 三重检查，但它用的是
+      `str(candidate).startswith(str(dist))` —— **没有分隔符边界**，
+      于是同层兄弟目录 /x/uidist2 能通过 /x/uidist 的检查。
+      端到端实测：GET /%2e%2e/uidist2/secret.txt → 200 + TOP-SECRET。
+      原规则问的是「有没有校验 .. /斜杠」，AF19 两者都不缺。
+    evidence: ["AF19", "W147b"]
+    action: "对路径/边界类检查，新增「无分隔符前缀比较」判据"
+
+  - id: R3
+    title: "区分「有没有 try」与「异常会不会真的逃逸」"
+    body: >
+      IN-02 报 70 条「int()/float() 无 try」。但只有 restore() 链上那 4 处的
+      异常会冒泡到启动路径；MCP 那 6 条调用方 dispatch() 有 except Exception，
+      还特意做了「完整 traceback 只落服务端日志，不回传客户端」。
+      规则只看函数内有没有 try，回答不了「异常最后去哪了」。
+    evidence: ["AF20", "W148"]
+    action: "判异常逃逸要看调用链上的兜底，而不只是函数内的 try"
+
+  - id: R4
+    title: "降噪规则本身要纳入门禁（被消除的命中需抽样核验）"
+    body: >
+      （沿用 20261010 提案 R2，本轮再添证据）
+      W146 修完 SER-01 后，我对 11 条里的一条（M6）的判断错了：
+      它有 logger.warning，判据据此降 low，但调用方全量覆盖写盘 ⇒ 真丢数据。
+      误杀只能靠**独立判据**发现——判据对自身结论永远自洽。
+    evidence: ["W126", "W146"]
+    action: "每条降噪规则配一个独立判据的抽样核验，误杀必须可标记 resolved 但需带证据"
+
+  - id: R5
+    title: "补丁必须过 PoC 与 patch_lint，且名单自适应"
+    body: >
+      （沿用 20261010 提案 R1）本轮 AF21 补丁打在 af_shadow.py，
+      而该文件此前不在 patch_lint 名单内。0 文件时 patch_lint 输出 OK 是缺陷，
+      必须告警。
+    evidence: ["M23", "AF21"]
+    action: "patch_lint 名单按项目自适应；检查文件数为 0 时判 FAIL"
+
+  - id: R6
+    title: "负向测试的用例本身也可能是错的"
+    body: >
+      本轮 W145 第一版把 re.compile 插在 import re 之前 ⇒ NameError，
+      而分析器有宽泛异常兜底，结果不是崩溃，是**静默少了 3 条命中**（17 vs 20）。
+      如果只跑一遍看到「19→10、假阳性消失」，会以为修好了。
+    evidence: ["W145", "W143c", "W138d"]
+    action: "每次改判据后必须跑负向测试；结果「没变」时先怀疑刚改的东西"
+
+gaps:
+  - id: gap-9
+    title: "装饰器挂载的防护，规则看不见"
+    body: >
+      RSC-02 报 _walk/_nnf「无 visited、无预算」，但两道防护都在 @cycle_safe
+      装饰器里，函数体一丝不露。与 W69（async 节点）同族：
+      规则只看函数体，看不见加在函数外面的东西。
+    evidence: ["W139"]
+  - id: gap-10
+    title: "嵌套函数的参数归属"
+    body: >
+      AF19 的 spa_fallback 是 build_app 的嵌套函数，AST 把它归到外层，
+      full_path 不是 build_app 的参数 ⇒ 「变量是否来自请求」判不出。
+    evidence: ["W147 局限"]
+  - id: gap-11
+    title: "跨模块的反向路径追不到"
+    body: >
+      Instance 类在 af_instance.py，restore_instance() 在 af_persist.py。
+      判据只看同模块 ⇒ 往返完整却仍被判「单向序列化」。
+      与 W98（跨三层追不到）同族。
+    evidence: ["W146 局限"]
+  - id: gap-12
+    title: "「返回 None」的语义方向"
+    body: >
+      第四次遇到。AF21：shadow 档 _do 返回 None，而 run() 把 None 解释为
+      「失败且无兜底边 ⇒ 终止」。同一批里 homesdk_time() 返回 None 是
+      「模块不可用」、_pick() 返回 None 是「没找到」、「已签发的 None」则是拒绝。
+      规则无法区分。
+    evidence: ["AF21", "W141", "W107", "RMW-01", "CONC-06"]
