@@ -1,0 +1,150 @@
+id: py.guard_call_swallowed
+name: 护栏/置位调用被静默 except 吞掉
+description: >
+  在 `try` 里调用护栏类 API（置位、隔离、拒绝写入、出站校验……），
+  但 `except` 分支是 `pass` 或纯 `pass` 语句 —— **护栏自身失败时被静默吞掉**，
+  既不置位也不留痕，防护形同虚设。
+
+  来源：memory-agent 第三期第十九轮确证缺陷 M23（high）。
+
+      try:
+          from .state_poison import mark
+          mark(self.users_file, exc)     # 置位：告诉写侧"这个文件读不出来，别覆盖"
+      except Exception:
+          pass                            # ← mark() 失败（含 import 失败）无声无息
+
+  实测确证：把 mark 换成必抛异常的桩函数后 ——
+  播种 alice/bob/carol → 损坏 users.json → register('dave') **返回 True** →
+  盘上只剩 ['dave']，原三个账号全丢，且**日志无任何输出**。
+  即 M6（破坏性覆盖）在"已修复"的代码里静默复发。
+
+  这个形态的可怕之处在于：**读代码时它看起来是有防护的**。
+  有 try、有护栏调用、有 except —— 三样都在，唯独 except 里什么都不做。
+  而护栏失败恰恰是最需要出声的时刻：它是安全屏障的最后一道。
+
+  跨项目同形态已出现三次：
+    * memory-agent M23（mark 被 pass 吞）
+    * doubao-butler 第十三轮（隔离动作 6 处里 5 处静默没执行，因路径属性名不匹配
+      `if p:` 为假跳过 —— 同族：护栏失败不留痕）
+    * AutoForge 第十轮（护栏装在调用方不走的辅助方法上 —— 同族：装了但没接上）
+
+  定位 high：后果是**防护失效**，不是风格问题。
+
+  ⚠ **status 为 draft（维护者注：引擎无 proposed 状态，draft 等价），不是 active —— 当前不可启用。**
+
+  原因：五类判据无法表达"节点在哪个语法上下文里"。本规则只能用
+  `call` + `type: [Pass]` 的 AND 做近似，即"同文件内既有护栏调用又有 pass"。
+
+  自测 7/7 通过，但**真实语料精确率 0/6**：
+    memory-agent 补丁副本 3 条（auth/templates/outbound_guard）
+    doubao-butler 原仓库 1 条 + 补丁副本 2 条
+  —— 全部是"文件里别处有个无关的 pass"。
+
+  对照验证（证明规则本身是对的，缺的只是判据）：
+    M23 修复**前**形态 命中=True    ← 该抓的抓到了
+    M23 修复**后**形态 命中=False   ← 修好了就不报
+
+  所以这条规则的当前价值不是"可启用"，而是**标定 gap-6 的必要性**，
+  并且提供一套可复现样本（7 条自测 + 6 条已知假阳性 + 修复前后对照），
+  供维护者在实现 `context` 判据后直接验证效果。
+
+  真正的判据应能表达：某 call 节点位于 ExceptHandler 内，
+  且该 handler 的 body 仅含 `pass`（或仅含不改变控制流的语句）。
+
+applies_to: []
+mode: static_ast
+severity: high
+status: draft
+version: "1.0.0"
+
+# ── 项目假设（对应 gap-5）：护栏 API 名随项目而变，不应硬编码 ──
+# 未提供时引擎应从 src_root 自适应推断（见 gap-5 的 suggestion）
+assumptions:
+  guard_api:
+    - mark
+    - mark_poisoned
+    - guard
+    - barrier
+    - quarantine
+    - cycle_safe
+    - safe_json_dumps
+    - validate_outbound_url
+    - validate_url
+    - assert_safe_outbound
+    - check_and_recover
+
+match:
+  call: [mark, mark_poisoned, guard, barrier, quarantine, cycle_safe,
+         safe_json_dumps, validate_outbound_url, validate_url,
+         assert_safe_outbound]
+  type: [Pass]
+
+tests:
+  dirty:
+    - name: guard-swallowed-by-pass
+      code: |
+        def _load_users(self):
+            try:
+                return json.loads(p.read_text())
+            except Exception as exc:
+                try:
+                    from .state_poison import mark
+                    mark(self.users_file, exc)
+                except Exception:
+                    pass
+                return {}
+    - name: quarantine-swallowed
+      code: |
+        def save(path, data):
+            try:
+                barrier(path)
+            except Exception:
+                pass
+            write_json(path, data)
+    - name: validate-url-swallowed
+      code: |
+        def fetch(url):
+            try:
+                validate_outbound_url(url)
+            except Exception:
+                pass
+            return httpx.get(url)
+
+  clean:
+    - name: guard-with-logging
+      code: |
+        def _load_users(self):
+            try:
+                return json.loads(p.read_text())
+            except Exception as exc:
+                try:
+                    from .state_poison import mark
+                    mark(self.users_file, exc)
+                except Exception as _me:
+                    _LOG.error("置位失败（写侧护栏可能未生效）: %s", _me)
+                return {}
+    - name: guard-reraise
+      code: |
+        def save(path, data):
+            try:
+                barrier(path)
+            except Exception as exc:
+                raise RuntimeError(f"护栏失败: {exc}")
+            write_json(path, data)
+    - name: no-guard-at-all
+      code: |
+        def helper(items):
+            for x in items:
+                if not x:
+                    pass
+            return len(items)
+    - name: pass-in-unrelated-branch
+      code: |
+        def poll():
+            while True:
+                try:
+                    item = queue.get_nowait()
+                except Empty:
+                    pass
+                else:
+                    handle(item)
