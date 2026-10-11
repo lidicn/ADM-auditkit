@@ -31,12 +31,16 @@ def _load_findings(round_dir: Path) -> list[dict]:
                 d = json.loads(jf.read_text(encoding="utf-8-sig"))
             except Exception:
                 continue
-            all_f.extend(d.get("findings", []))
+            if isinstance(d, list):
+                all_f.extend(d)
+            elif isinstance(d, dict):
+                all_f.extend(d.get("findings", []))
     # 兜底：all-findings.json
     af = round_dir / "all-findings.json"
     if af.exists() and not all_f:
         try:
-            all_f = json.loads(af.read_text(encoding="utf-8-sig")).get("findings", [])
+            d = json.loads(af.read_text(encoding="utf-8-sig"))
+            all_f = d.get("findings", []) if isinstance(d, dict) else d
         except Exception:
             pass
     return all_f
@@ -75,7 +79,7 @@ def generate_report(round_dir: Path, project: str, profile: dict | None = None) 
     lines.append(f"# {project} 审计报告 · {round_dir.name}")
     lines.append("")
     lines.append(f"> 由 auditkit 自动生成。本报告是**机器候选**，非确证缺陷——")
-    lines.append(f> 候选不实测不升级为缺陷（proposal-1 方法论）。")
+    lines.append(f"> 候选不实测不升级为缺陷（proposal-1 方法论）。")
     lines.append("")
 
     # 头部：画像摘要
