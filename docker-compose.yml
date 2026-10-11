@@ -9,9 +9,9 @@ services:
     restart: "on-failure:3"
     volumes:
       - /vol1/1000/docker/ADM-auditkit:/app:ro                # 框架只读
-      - /vol1/1000/docker/autoforge:/targets/autoforge:ro    # 审计目标只读
-      - /vol1/1000/docker/doubao-butler:/targets/doubao-butler:ro
-      - /vol1/1000/docker/memory-agent:/targets/memory-agent:ro
+      - /vol1/1000/docker/autoforge:/data/workspace/audit/src:ro    # AutoForge
+      - /vol1/1000/docker/doubao-butler:/data/workspace/repos/doubao-butler:ro
+      - /vol1/1000/docker/memory-agent:/data/workspace/repos/memory-agent:ro
       - audit-out:/audit-out                                  # findings/报告落这里
     environment:
       - TZ=Asia/Shanghai
