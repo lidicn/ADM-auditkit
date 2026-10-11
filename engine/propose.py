@@ -90,7 +90,17 @@ files_changed:
 
 
 def collect_changed_files() -> list[Path]:
-    """收集 git 仓库中未提交的改动文件（新增 + 修改）。"""
+    """收集 git 仓库中未提交的改动文件（新增 + 修改 + 未跟踪）。
+
+    修复历史：v1.0.1 之前静默吞掉异常，导致 git status 有变更但 files_changed=[]。
+    现在会打印诊断信息，便于定位"在错误目录跑 git"或"git 不可用"等问题。
+    """
+    import sys as _sys
+    # 确认 ROOT 是 git 仓库
+    git_dir = ROOT / ".git"
+    if not git_dir.exists():
+        print(f"[propose] 警告: {ROOT} 不是 git 仓库（无 .git），无法收集改动文件", file=_sys.stderr)
+        return []
     try:
         # 已暂存的改动
         r1 = subprocess.run(
@@ -106,12 +116,17 @@ def collect_changed_files() -> list[Path]:
             capture_output=True, text=True, cwd=ROOT, timeout=10)
         files = set()
         for r in (r1, r2, r3):
-            if r.returncode == 0:
-                for line in r.stdout.strip().split("\n"):
-                    if line:
-                        files.add(line)
+            if r.returncode != 0:
+                print(f"[propose] git 命令失败: {r.stderr.strip()}", file=_sys.stderr)
+                continue
+            for line in r.stdout.strip().split("\n"):
+                if line:
+                    files.add(line)
+        if not files:
+            print(f"[propose] 诊断: git 命令成功但未收集到改动文件（工作区干净？）", file=_sys.stderr)
         return sorted(ROOT / f for f in files)
-    except Exception:
+    except Exception as e:
+        print(f"[propose] 收集改动文件异常: {type(e).__name__}: {e}", file=_sys.stderr)
         return []
 
 

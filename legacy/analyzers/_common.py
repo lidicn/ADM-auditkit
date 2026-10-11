@@ -139,12 +139,18 @@ def has_removal_path(scope_src: str, name: str) -> bool:
 
 
 def is_bounded(scope_src: str, name: str) -> bool:
-    """该容器是否有界化证据（deque(maxlen) / max_* / 尾部裁剪 / trim）。"""
+    """该容器是否有界化证据（deque(maxlen) / max_* / 尾部裁剪 / trim）。
+
+    v2 注：赋值型模式必须容忍**注解赋值** `self.X: deque[T] = deque(maxlen=)` ——
+    AutoForge round-005 实测 `af_bus.EventBus.emitted = deque(maxlen=1000)`
+    （带注解）被漏判为无界，产生假阳性（PITFALLS N3 家族：只认一种书写形态）。
+    """
     if not name:
         return False
+    ann = rf"(?::[^=]*)?"  # 可选类型注解 `: deque[BusEvent]`
     pats = [
-        rf"self\.{re.escape(name)}\s*=\s*deque\([^)]*maxlen",
-        rf"self\.{re.escape(name)}\s*=\s*self\.{re.escape(name)}\[-",
+        rf"self\.{re.escape(name)}{ann}\s*=\s*deque\([^)]*maxlen",
+        rf"self\.{re.escape(name)}{ann}\s*=\s*self\.{re.escape(name)}\[-",
         rf"del\s+self\.{re.escape(name)}\s*\[\s*:",
         rf"while\s+len\(\s*self\.{re.escape(name)}\s*\)\s*>",
         rf"if\s+len\(\s*self\.{re.escape(name)}\s*\)\s*>",

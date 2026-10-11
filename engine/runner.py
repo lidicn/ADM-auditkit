@@ -69,7 +69,9 @@ def run_generic_text(repo_root: Path) -> list[Finding]:
 
 def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
               extra_roots: list[Path] | None = None,
-              include_legacy: bool = False) -> dict:
+              include_legacy: bool = False,
+              file_filter: list[str] | None = None,
+              rule_filter: list[str] | None = None) -> dict:
     """执行一轮审计，写入兼容格式的产物。
 
     Args:
@@ -78,6 +80,8 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
         profile_path: 画像 JSON 路径（可选）
         extra_roots: 附加扫描根（可选）
         include_legacy: 是否同时运行 legacy/ 下的旧分析器（默认 False，只跑 rules/ 新规则）
+        file_filter: 只扫描这些文件（相对路径列表），None 表示全量（P1-3 delta 模式）
+        rule_filter: 只跑这些规则（rule id 列表），None 表示全量（P1-3 targeted/regression 模式）
 
     Returns:
         summary dict（兼容 registry.py 的 summary 格式）
@@ -98,6 +102,11 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
     # 2) 加载规则
     rules_report = load_rules()
     active_rules = list(rules_report.registry)
+    # P1-3：规则过滤（targeted/regression 模式）
+    if rule_filter:
+        rule_set = set(rule_filter)
+        active_rules = [r for r in active_rules if getattr(r, "id", "") in rule_set]
+        print(f"  [模式] 规则过滤: {len(active_rules)}/{len(rules_report.registry)} 条规则")
 
     # 构造 adapter 传递 extra_roots
     class _SimpleAdapter:
@@ -116,7 +125,19 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
     # 3) 运行新规则（逐文件逐规则）
     mode = StaticAstMode(include_legacy=False)
     new_rule_findings: list[Finding] = []
+    # P1-3：文件过滤（delta 模式）
+    file_set = set(file_filter) if file_filter else None
+    scanned_files = 0
     for path in mode.iter_sources(str(repo_path), prof, adapter):
+        # 文件过滤：只扫描 file_filter 中的文件
+        if file_set is not None:
+            try:
+                rel = str(path.relative_to(repo_path))
+            except ValueError:
+                rel = str(path)
+            if rel not in file_set:
+                continue
+        scanned_files += 1
         try:
             src = path.read_text(encoding="utf-8", errors="replace")
         except OSError:

@@ -115,6 +115,10 @@ class BaseRule:
     status: str = "draft"
     version: str = "0.0.0"
     tests: dict = {}               # {"dirty": [{"name","code"}], "clean": [...]}
+    # P1-4：规则意图标签
+    #   discovery = 发现新缺陷（0 命中需要排查）
+    #   regression = 验证已修复缺陷（0 命中是成功，豁免零命中自检，不进 triage 队列）
+    intent: str = "discovery"
 
     def run(self, tree, profile, adapter) -> list:
         raise NotImplementedError(f"{type(self).__name__} 未实现 run()")
@@ -160,6 +164,7 @@ def rule_summary(rule) -> dict:
         "status": getattr(rule, "status", ""),
         "severity": getattr(rule, "severity", ""),
         "version": getattr(rule, "version", ""),
+        "intent": getattr(rule, "intent", "discovery"),
     }
 
 

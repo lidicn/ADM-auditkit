@@ -190,12 +190,46 @@ def cmd_round(args) -> int:
             extra_roots.append(d)
     try:
         from engine.runner import run_round
+        # P1-3：轮次模式分流
+        mode = getattr(args, "mode", "full")
+        file_filter = None
+        rule_filter = None
+
+        if mode == "delta":
+            # 只审 git diff 涉及的文件
+            try:
+                r = subprocess.run(["git", "diff", "--name-only", "HEAD"],
+                                   capture_output=True, text=True, cwd=path, timeout=10)
+                if r.returncode == 0:
+                    file_filter = [l for l in r.stdout.strip().split("\n") if l]
+                    print(f"  [delta 模式] 只审 {len(file_filter)} 个变更文件")
+            except Exception as e:
+                print(f"  [delta 模式] git diff 失败，回退全量: {e}")
+
+        elif mode == "targeted":
+            # 只跑指定规则
+            if getattr(args, "rules", None):
+                rule_filter = [r.strip() for r in args.rules.split(",")]
+                print(f"  [targeted 模式] 只跑 {len(rule_filter)} 条规则: {rule_filter}")
+
+        elif mode == "regression":
+            # 仅确证 bug 对应规则（从 bugs.json 读取）
+            bugs_file = PROJECTS_DIR / name / "bugs.json"
+            if bugs_file.exists():
+                bugs = json.loads(bugs_file.read_text(encoding="utf-8"))
+                rule_filter = list({b["rule"] for b in bugs.get("bugs", []) if b.get("status") == "open"})
+                print(f"  [regression 模式] 只跑 {len(rule_filter)} 条确证 bug 对应规则: {rule_filter}")
+            else:
+                print(f"  [regression 模式] 无 bugs.json，回退全量")
+
         summary = run_round(
             repo_path=path,
             outdir=round_dir,
             profile_path=round_dir / "profile.json",
             extra_roots=extra_roots,
             include_legacy=getattr(args, "legacy", False),
+            file_filter=file_filter,
+            rule_filter=rule_filter,
         )
         print(f"  分析器 {summary['analyzers_ok']}/{summary['analyzers_total']}  "
               f"findings {summary['total_findings']}  "
@@ -420,6 +454,59 @@ def cmd_propose(args) -> int:
     return 2
 
 
+def cmd_diff(args) -> int:
+    """P0-2：命中集 diff —— 规则/共享判据变更后分钟级验证。"""
+    cmd = [sys.executable, str(CORE / "hit_set_diff.py"), args.project,
+           str(args.round_a), str(args.round_b)]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    print(p.stdout)
+    if p.stderr:
+        print(p.stderr, file=sys.stderr)
+    return p.returncode
+
+
+def cmd_triage(args) -> int:
+    """P1-1：triage 裁决落盘。"""
+    cmd = [sys.executable, str(CORE / "triage.py"), args.triage_cmd]
+    if args.project:
+        cmd.append(args.project)
+    if args.rule:
+        cmd.extend(["--rule", args.rule])
+    if args.file:
+        cmd.extend(["--file", args.file])
+    if args.line is not None:
+        cmd.extend(["--line", str(args.line)])
+    if args.reason:
+        cmd.extend(["--reason", args.reason])
+    if args.round is not None:
+        cmd.extend(["--round", str(args.round)])
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    print(p.stdout)
+    if p.stderr:
+        print(p.stderr, file=sys.stderr)
+    return p.returncode
+
+
+def cmd_scout(args) -> int:
+    """手猎轮：初始化四件套。"""
+    cmd = [sys.executable, str(CORE / "scout.py"), args.project]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    print(p.stdout)
+    if p.stderr:
+        print(p.stderr, file=sys.stderr)
+    return p.returncode
+
+
+def cmd_reconcile(args) -> int:
+    """对账：手猎结论 vs 工具结论。"""
+    cmd = [sys.executable, str(CORE / "reconcile.py"), args.project, "--round", str(args.round)]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    print(p.stdout)
+    if p.stderr:
+        print(p.stderr, file=sys.stderr)
+    return p.returncode
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="auditkit", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -447,6 +534,11 @@ def main() -> int:
     p4.add_argument("--round", type=int, default=1)
     p4.add_argument("--legacy", action="store_true",
                     help="同时运行 legacy/ 下 19 个旧分析器（默认关闭，只跑 rules/ 新规则）")
+    # P1-3：轮次模式分流
+    p4.add_argument("--mode", choices=["full", "delta", "targeted", "regression"],
+                    default="full",
+                    help="轮次模式：full=全量, delta=只审git diff文件, targeted=指定规则, regression=仅确证bug对应规则")
+    p4.add_argument("--rules", help="targeted 模式：指定规则 ID（逗号分隔）")
     p4.set_defaults(func=cmd_round)
 
     p5 = sub.add_parser("status", help="查看项目缺陷台账")
@@ -487,6 +579,35 @@ def main() -> int:
     p8s = p8sub.add_parser("show", help="查看某个提案包摘要")
     p8s.add_argument("--name", required=True, help="提案包目录名（支持模糊匹配）")
     p8.set_defaults(func=cmd_propose)
+
+    # P0-2：命中集 diff —— 规则/共享判据变更后分钟级验证
+    p9 = sub.add_parser("diff", help="对比两轮命中集（规则变更后验证 added/removed）")
+    p9.add_argument("project", help="项目名")
+    p9.add_argument("round_a", type=int, help="基准轮次")
+    p9.add_argument("round_b", type=int, help="对比轮次")
+    p9.set_defaults(func=cmd_diff)
+
+    # P1-1：triage 裁决落盘 —— 人工裁决按 (rule, file, line) 写进项目 profile
+    p10 = sub.add_parser("triage", help="裁决落盘：accept/reject/list/apply")
+    p10.add_argument("triage_cmd", choices=["accept", "reject", "list", "apply"])
+    p10.add_argument("project", nargs="?", help="项目名")
+    p10.add_argument("--rule", help="规则 ID")
+    p10.add_argument("--file", help="文件路径")
+    p10.add_argument("--line", type=int, help="行号")
+    p10.add_argument("--reason", help="裁决原因")
+    p10.add_argument("--round", type=int, help="apply 时指定轮次")
+    p10.set_defaults(func=cmd_triage)
+
+    # 新增：scout 手猎轮 —— 工作流消费经验，不生产经验。新项目首轮先手猎。
+    p11 = sub.add_parser("scout", help="手猎轮：初始化四件套（假设/方言/规则草案/四问）")
+    p11.add_argument("project", help="项目名")
+    p11.set_defaults(func=cmd_scout)
+
+    # 新增：reconcile 对账 —— 手猎结论 vs 工具结论，输出差异表
+    p12 = sub.add_parser("reconcile", help="对账：手猎结论 vs 工具结论")
+    p12.add_argument("project", help="项目名")
+    p12.add_argument("--round", type=int, default=1, help="对比轮次")
+    p12.set_defaults(func=cmd_reconcile)
 
     args = ap.parse_args()
     return args.func(args)

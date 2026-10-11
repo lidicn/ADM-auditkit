@@ -110,11 +110,17 @@ class UnboundedContainerRule(BaseRule):
                     continue
                 if not re.search(_GROWTH_RE.format(name=re.escape(name)), scope_src, re.I):
                     continue                      # 没有增长动作，不报
+                # P2-2：生命周期启发式——Builder/Factory 类通常按调用构建即弃，
+                # 与进程级单例同 severity 报出会稀释信号。降级为 low。
+                severity = self.severity
+                class_name = node.name.lower()
+                if any(k in class_name for k in ("builder", "factory", "temp", "tmp")):
+                    severity = "low"
                 out.append(Finding(
                     rule_id=self.id,
                     file=str(getattr(tree, "path", "<memory>")),
                     line=int(lineno),
-                    severity=self.severity,
+                    severity=severity,
                     title=self.name,
                     detail=(f"{node.name}.self.{name} 只进不出：无 pop/clear/del，"
                             f"也无 maxlen/max_* 界化证据"),
