@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -507,6 +508,65 @@ def cmd_reconcile(args) -> int:
     return p.returncode
 
 
+def cmd_round_all(args) -> int:
+    """批量并行扫描多个项目。
+
+    哲学：扫描并行（分钟级，边际成本趋近零），triage 分批（按 criticality 排队）。
+    """
+    import concurrent.futures
+
+    # 确定项目列表
+    if args.projects:
+        projects = [p.strip() for p in args.projects.split(",")]
+    else:
+        pr = load_projects()
+        projects = list(pr.get("projects", {}).keys())
+
+    if not projects:
+        print("错误: 没有指定项目，且配置表为空")
+        return 2
+
+    print(f"=== 批量并行扫描: {len(projects)} 个项目, round-{args.round:03d}, mode={args.mode} ===")
+    print(f"项目: {', '.join(projects)}")
+    print()
+
+    def run_one(project: str) -> tuple[str, int, str]:
+        """跑一个项目的审计，返回 (project, returncode, output)。"""
+        cmd = [sys.executable, str(ROOT / "auditkit"), "round", project,
+               "--round", str(args.round), "--mode", args.mode]
+        if args.rules:
+            cmd.extend(["--rules", args.rules])
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        return project, p.returncode, p.stdout + p.stderr
+
+    # 并行执行
+    results = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(projects)) as executor:
+        futures = {executor.submit(run_one, p): p for p in projects}
+        for future in concurrent.futures.as_completed(futures):
+            project, rc, output = future.result()
+            results[project] = (rc, output)
+            status = "✅" if rc == 0 else "❌"
+            print(f"[{status}] {project} 完成 (exit={rc})")
+
+    # 汇总
+    print()
+    print("=== 汇总 ===")
+    for project in projects:
+        rc, output = results.get(project, (1, ""))
+        status = "成功" if rc == 0 else "失败"
+        # 提取 findings 数量
+        findings_match = re.search(r"findings\s+(\d+)", output)
+        findings = findings_match.group(1) if findings_match else "?"
+        print(f"  {project}: {status} | findings={findings}")
+
+    print()
+    print("⚠ 注意：扫描已并行完成，但 triage（裁决）请分批进行——")
+    print("  按 criticality 排队，单次只裁一个项目的队列，裁完回灌规则再开下一个。")
+
+    return 0 if all(rc == 0 for rc, _ in results.values()) else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="auditkit", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -608,6 +668,15 @@ def main() -> int:
     p12.add_argument("project", help="项目名")
     p12.add_argument("--round", type=int, default=1, help="对比轮次")
     p12.set_defaults(func=cmd_reconcile)
+
+    # 新增：round-all 批量并行扫描 —— 扫描并行，triage 分批
+    p13 = sub.add_parser("round-all", help="批量并行扫描多个项目（扫描并行，triage 分批）")
+    p13.add_argument("--projects", help="项目名列表（逗号分隔，默认全部已配置项目）")
+    p13.add_argument("--round", type=int, default=1, help="轮次号")
+    p13.add_argument("--mode", choices=["full", "delta", "targeted", "regression"],
+                     default="full", help="轮次模式（同 round --mode）")
+    p13.add_argument("--rules", help="targeted 模式：指定规则 ID（逗号分隔）")
+    p13.set_defaults(func=cmd_round_all)
 
     args = ap.parse_args()
     return args.func(args)
