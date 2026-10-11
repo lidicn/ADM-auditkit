@@ -68,15 +68,34 @@ projects:
     note: "新增审计目标，首次执行先跑 profile 探测技术栈。"
     focus: []
 
-  # 以下项目在 NAS 上路径待确认，先用 --path 临时指定
-  # deepseek-pp:
-  #   path: /data/workspace/repos/deepseek-pp
-  # deepseek-studio:
-  #   path: /data/workspace/repos/deepseek-studio
-  # DeskPilot:
-  #   path: /data/workspace/repos/DeskPilot
-  # xiaotiancai:
-  #   path: /data/workspace/repos/xiaotiancai
+  # ── 桌面端 / 电视端项目（从 Windows 拷贝到 NAS）──────────────────
+  deepseek-pp:
+    repo: ""
+    path: /data/workspace/repos/deepseek-pp
+    known_stack: "待探测"
+    note: "桌面端应用，首次执行先跑 profile 探测技术栈。"
+    focus: []
+
+  deepseek-studio:
+    repo: ""
+    path: /data/workspace/repos/deepseek-studio
+    known_stack: "待探测"
+    note: "桌面端应用，首次执行先跑 profile 探测技术栈。"
+    focus: []
+
+  DeskPilot:
+    repo: ""
+    path: /data/workspace/repos/DeskPilot
+    known_stack: "待探测"
+    note: "桌面端应用，首次执行先跑 profile 探测技术栈。"
+    focus: []
+
+  xiaotiancai:
+    repo: ""
+    path: /data/workspace/repos/xiaotiancai
+    known_stack: "待探测"
+    note: "安卓电视端应用，首次执行先跑 profile 探测技术栈。"
+    focus: []
 
 defaults:
   skip_dirs: [.git, __pycache__, node_modules, .venv, venv, dist, build,
