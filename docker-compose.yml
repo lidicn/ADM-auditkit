@@ -1,29 +1,22 @@
-# ADM-auditkit 容器 —— 给元宝沙箱 SSH 连入跑审计的最小受信面
+# ADM-auditkit 容器 —— 部署到 NAS，给 DeepSeek 等 AI agent 调用的审计工具
 # 遵循 NAS 开发规范：
 #   §6.1 端口绑 192.168.2.200，禁 0.0.0.0
 #   §2-7 restart 退避（on-failure:3），不 unless-stopped 猛拉（防 trim 死锁）
-#   §3-7 健康探针
 services:
   auditkit:
     build: .
     container_name: auditkit
     restart: "on-failure:3"
-    ports:
-      - "192.168.2.200:22022:22"   # §6.1：绑 LAN IP；22022 避开占用端口（本机/局域网用）
-      - "100.114.216.94:22022:22"  # Tailscale IP；元宝从公网经 tailnet 直连（裸 TCP，不经 serve 转发）
     volumes:
-      - /vol1/1000/docker/ADM-auditkit:/workspace:ro         # 框架只读
+      - /vol1/1000/docker/ADM-auditkit:/app:ro                # 框架只读
       - /vol1/1000/docker/autoforge:/targets/autoforge:ro    # 审计目标只读
       - /vol1/1000/docker/doubao-butler:/targets/doubao-butler:ro
+      - /vol1/1000/docker/memory-agent:/targets/memory-agent:ro
       - audit-out:/audit-out                                  # findings/报告落这里
     environment:
       - TZ=Asia/Shanghai
-    healthcheck:
-      test: ["CMD", "pgrep", "sshd"]
-      interval: 60s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    # 常驻容器，用 docker exec 跑命令
+    command: ["tail", "-f", "/dev/null"]
 
 volumes:
   audit-out:
