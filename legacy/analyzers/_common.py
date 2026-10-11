@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import re
+from pathlib import Path
 
 CONTAINER_FUNCS = {"dict", "list", "deque", "set", "defaultdict", "OrderedDict",
                    "field", "defaultdict"}
@@ -151,3 +152,35 @@ def is_bounded(scope_src: str, name: str) -> bool:
         rf"\bmax_\w*{re.escape(name)}\b",
     ]
     return any(re.search(p, scope_src, re.I) for p in pats)
+
+
+# ── 7. 文件读取与解析（去 BOM，不静默）──────────────────────────────
+
+def read_source(path):
+    """读源码 -> (text, error)。用 utf-8-sig 自动去 BOM，失败返回 error 而非静默。
+
+    PITFALLS N9 / lesson 38 / SC-02：样本/项目文件带 BOM 时，
+    read_text(errors="ignore") 不带 encoding 会让 BOM 字符进入 ast.parse
+    抛 SyntaxError，被 except SyntaxError 静默吞掉 → 全分析器 0 命中
+    （防静默失效的门禁自己静默失效）。
+    复用 engine/helpers.py:load_files（200-214 行）已验证的 utf-8-sig 模式。
+    """
+    try:
+        return Path(path).read_text(encoding="utf-8-sig", errors="ignore"), None
+    except OSError as exc:
+        return None, str(exc)[:80]
+
+
+def parse_source(path):
+    """读 + parse -> (tree, error)。失败返回 (None, error_str)，不静默。
+
+    调用方必须把 error 打印到 stderr（带 [warn] 标记）让 selftest runner 抓到，
+    不能 except SyntaxError: continue 静默吞。
+    """
+    text, rerr = read_source(path)
+    if text is None:
+        return None, rerr
+    try:
+        return ast.parse(text), None
+    except SyntaxError as exc:
+        return None, f"{type(exc).__name__}: {exc}"[:80]

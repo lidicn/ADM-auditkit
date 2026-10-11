@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -29,7 +30,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CORE = ROOT / "core"
 CONFIG = ROOT / "config"
-PROJECTS_DIR = ROOT / "projects"
+# 环境变量覆盖：容器内 /workspace 只读时，设 AUDITKIT_PROJECTS_DIR=/audit-out/projects
+# 让 round 产物写到可写卷（开发规范 §1：NAS 是运行环境，产物落可写区）
+PROJECTS_DIR = Path(os.environ.get("AUDITKIT_PROJECTS_DIR") or (ROOT / "projects"))
 SELFTEST = ROOT / "selftest"
 
 
@@ -88,11 +91,29 @@ def cmd_selftest(args) -> int:
         return 1
     print("自检结果:", "通过" if d.get("ok") else "失败")
     print("分析器数:", d.get("analyzers"))
+    # 三态分组（proposal-2 建议 7）：tools_missing / ok_but_no_hit / ok
+    statuses = d.get("statuses", {})
+    if statuses:
+        from collections import Counter
+        grp = Counter(statuses.values())
+        print("状态分布:", dict(grp))
+        for s in ("tools_missing", "ok_but_no_hit"):
+            bad = [k for k, v in statuses.items() if v == s]
+            if bad:
+                print(f"  ⚠ {s}:", bad)
     if d.get("dirty_hits"):
         zero = [k for k, v in d["dirty_hits"].items() if v == 0]
         print("❌ 0 命中（规则可能失效）:", zero or "无")
     if d.get("clean_hits"):
         print("clean 样本命中:", {k: v for k, v in d["clean_hits"].items() if v} or "无")
+    # drift 红警（规则消失/新增——双向检测，门禁健全性证据）
+    drift = d.get("drift", [])
+    if drift:
+        print(f"drift 红警（{len(drift)} 条）:")
+        for line in drift[:15]:
+            print("  ", line)
+        if len(drift) > 15:
+            print(f"  ... 还有 {len(drift) - 15} 条")
     for f in d.get("failures", []):
         print("  ", f)
     return 0 if d.get("ok") else 1

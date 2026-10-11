@@ -18,6 +18,13 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 BUDGET_WORDS = ("depth", "budget", "limit", "max_", "cap", "count", "deadline", "_n", "level")
 NESTED_QUANT = re.compile(r"\((?:[^\\)]|\\.)*[\+\*]\)\s*[\+\*]")
 CARTESIAN_HINT = ("|", "&", "product", "combinations", "permutations")
@@ -265,9 +272,9 @@ def main() -> int:
     for p in sorted(root.rglob("*.py")):
         if any(part.startswith("test") for part in p.parts):
             continue
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         rel = str(p.relative_to(root))
         files += 1

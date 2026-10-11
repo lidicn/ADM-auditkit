@@ -11,6 +11,13 @@ import json
 import sys
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 
 def is_none_return(node: ast.Return) -> bool:
     if node.value is None:
@@ -67,9 +74,9 @@ def block_terminates(body: list) -> bool:
 
 
 def analyze(path: Path) -> list:
-    try:
-        tree = ast.parse(path.read_text(errors="ignore"))
-    except SyntaxError:
+    tree, perr = C.parse_source(path)
+    if perr:
+        sys.stderr.write(f"[warn] parse {path}: {perr}\n")
         return []
     out = []
     for fn in ast.walk(tree):

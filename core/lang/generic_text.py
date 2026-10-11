@@ -142,7 +142,7 @@ NEEDS_REVIEW = {"TS-03-unhandled-promise", "GO-01-err-ignored",
 
 def scan_file(path: Path, rel: str) -> list[dict]:
     try:
-        text = path.read_text(errors="ignore")
+        text = path.read_text(encoding="utf-8-sig", errors="ignore")
     except OSError:
         return []
     lang = EXT_LANG.get(path.suffix.lower())

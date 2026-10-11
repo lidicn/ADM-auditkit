@@ -5,7 +5,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "state_defects": {
     "dirty": {
@@ -21,7 +23,9 @@
     },
     "clean_allowed": [
       "AFS-01-silent-failure"
-    ]
+    ],
+    "status": "ok",
+    "warn_count": 0
   },
   "concurrency_defects": {
     "dirty": {
@@ -33,7 +37,9 @@
     },
     "clean_allowed": [
       "CONC-08-partial-lock-coverage"
-    ]
+    ],
+    "status": "ok",
+    "warn_count": 0
   },
   "boundary_defects": {
     "dirty": {
@@ -41,7 +47,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "controlflow_defects": {
     "dirty": {
@@ -49,11 +57,13 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "deadcode_defects": {
     "dirty": {
-      "DEAD-03-dead-api": 32
+      "DEAD-03-dead-api": 35
     },
     "clean": {},
     "clean_raw": {
@@ -61,7 +71,9 @@
     },
     "clean_allowed": [
       "DEAD-03-dead-api"
-    ]
+    ],
+    "status": "ok",
+    "warn_count": 0
   },
   "time_numeric_defects": {
     "dirty": {
@@ -69,10 +81,13 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "input_defects": {
     "dirty": {
+      "IN-05-dangerous-call": 1,
       "IN-03-path-join": 4
     },
     "clean": {},
@@ -81,7 +96,9 @@
     },
     "clean_allowed": [
       "IN-03-path-join"
-    ]
+    ],
+    "status": "ok",
+    "warn_count": 0
   },
   "consistency_defects": {
     "dirty": {
@@ -94,7 +111,9 @@
     },
     "clean_allowed": [
       "TX-01-multi-write-no-tx"
-    ]
+    ],
+    "status": "ok",
+    "warn_count": 0
   },
   "serialization_defects": {
     "dirty": {
@@ -103,10 +122,13 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "errorhandling_defects": {
     "dirty": {
+      "ERRH-05-no-timeout": 1,
       "ERRH-01-retry-swallows": 1,
       "ERRH-02-fake-success": 1
     },
@@ -116,7 +138,9 @@
     },
     "clean_allowed": [
       "ERRH-02-fake-success"
-    ]
+    ],
+    "status": "ok",
+    "warn_count": 0
   },
   "observability_defects": {
     "dirty": {
@@ -124,7 +148,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "config_compat_defects": {
     "dirty": {
@@ -132,7 +158,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "api_contract_defects": {
     "dirty": {
@@ -141,7 +169,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "semantic_defects": {
     "dirty": {
@@ -150,7 +180,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "resource_defects": {
     "dirty": {
@@ -162,7 +194,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "pattern_propagation": {
     "dirty": {
@@ -171,7 +205,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "auth_defects": {
     "dirty": {
@@ -180,7 +216,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "rmw_consistency": {
     "dirty": {
@@ -188,7 +226,9 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   },
   "testgap_defects": {
     "dirty": {
@@ -196,6 +236,33 @@
     },
     "clean": {},
     "clean_raw": {},
-    "clean_allowed": []
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
+  },
+  "generic_text": {
+    "dirty": {
+      "GEN-01-hardcoded-secret": 3,
+      "GEN-02-sql-concat": 2,
+      "GEN-03-eval-dynamic": 2,
+      "GEN-04-tls-disabled": 2,
+      "SH-02-rm-rf-var": 1,
+      "TS-01-innerhtml": 1,
+      "TS-02-cmd-injection": 1,
+      "YAML-01-privileged": 1,
+      "GEN-06-log-sensitive": 1,
+      "GEN-07-unsafe-random": 1,
+      "YAML-03-host-network": 1,
+      "YAML-04-no-resource-limit": 1,
+      "YAML-02-latest-tag": 1,
+      "SH-03-no-set-e": 1,
+      "SH-04-no-shellcheck": 1,
+      "TS-04-any-abuse": 2
+    },
+    "clean": {},
+    "clean_raw": {},
+    "clean_allowed": [],
+    "status": "ok",
+    "warn_count": 0
   }
 }

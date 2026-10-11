@@ -1,0 +1,34 @@
+# ============================================================
+# 元宝沙箱 → NAS auditkit 容器 连通性验证（两步）
+# ============================================================
+#
+# 前置：NAS 上 auditkit 容器已启动，SSH 监听 192.168.2.200:22022
+#       容器内 auditbot 用户，公钥认证，禁密码
+#
+# ── 第一步：元宝生成密钥对，报出公钥 ──────────────────────
+# 把下面三行粘给元宝跑：
+
+ssh-keygen -t ed25519 -f ~/.ssh/auditbot_key -N "" -C "auditbot@yuanbao"
+cat ~/.ssh/auditbot_key.pub
+echo "=== YUANBAO_PUBKEY_DONE ==="
+
+# 元宝会输出一行公钥（ssh-ed25519 AAAA... auditbot@yuanbao）
+# 把这行公钥报给开发者。开发者执行（在本地 PC）：
+#   ssh nas "docker exec auditkit sh -c 'echo \"<元宝公钥一行>\" >> /home/auditbot/.ssh/authorized_keys && chmod 600 /home/auditbot/.ssh/authorized_keys && chown auditbot:auditbot /home/auditbot/.ssh/authorized_keys'"
+#
+# ── 第二步：元宝 SSH 进容器读 CANARY ──────────────────────
+# 开发者加完公钥后，把下面粘给元宝跑：
+
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -i ~/.ssh/auditbot_key -p 22022 auditbot@192.168.2.200 \
+    'cat ~/CANARY && echo && hostname && echo OK_SSH_TO_AUDITKIT'
+
+# 期望输出三行：
+#   AUDITKIT_CONTAINER_ALIVE_<时间戳>   ← 证明连到了容器
+#   <容器 hostname 短串>                ← 不是 NAS 主机名，证明连的是容器
+#   OK_SSH_TO_AUDITKIT                  ← 自检标记
+#
+# 读懂结果：
+#   三个都输出 = 元宝真能 SSH 进 NAS auditkit 容器（L3 连通坐实）
+#   Connection refused / timeout = 容器没起或端口/网络不通
+#   Permission denied = 公钥没加对

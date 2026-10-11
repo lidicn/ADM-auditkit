@@ -27,6 +27,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 CACHE_HINT = re.compile(r"(?i)(cache|_cache|memo|_loaded|_snapshot)")
 PARSE_CALL = re.compile(r"(?i)^(json\.loads|json\.load|int|float|yaml\.safe_load|_parse)")
 IRREVERSIBLE = re.compile(r"(?i)(unlink|rmtree|remove|os\.remove|\.pop\(|del\s|truncate|drop)")
@@ -470,9 +477,9 @@ def main() -> int:
     for p0 in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p0.parts):
             continue
-        try:
-            tr = _ast.parse(p0.read_text(errors="ignore"))
-        except SyntaxError:
+        tr, perr = C.parse_source(p0)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p0}: {perr}\n")
             continue
         for n in _ast.walk(tr):
             if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef)):
@@ -483,9 +490,9 @@ def main() -> int:
     for p in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p.parts):
             continue
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         rel = str(p.relative_to(root))
         files += 1

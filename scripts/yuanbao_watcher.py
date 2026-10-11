@@ -46,15 +46,22 @@ def is_generating(page: Page) -> bool:
 
 def send_message(page: Page, text: str):
     try:
+        # 先滚动到页面底部，确保输入框可见
+        page.evaluate("() => window.scrollTo(0, document.body.scrollHeight)")
+        time.sleep(0.3)
+
         editor = page.query_selector(".ql-editor")
         if editor:
-            editor.click()
-            editor.fill(text)
-            time.sleep(0.5)
-            send_btn = page.query_selector(".SendButton_sendButton__g3Lcb")
-            if send_btn:
-                send_btn.click()
-                log(f"已发送: {text}")
+            # 用 JS 直接设置内容，不依赖点击
+            page.evaluate("""([el, text]) => {
+                el.innerHTML = '';
+                el.innerText = text;
+            }""", [editor, text])
+            time.sleep(0.3)
+
+            # 按回车发送
+            page.keyboard.press("Enter")
+            log(f"已发送: {text}")
     except Exception as e:
         log(f"发送失败: {e}", "ERROR")
 
@@ -66,7 +73,7 @@ def find_latest_round(text: str) -> int:
     return 0
 
 
-def watch(page: Page, project: str):
+def watch(page: Page, project: str, start_round: int = 0):
     log("=" * 60)
     log(f"项目: {project} | 纯保姆模式（不抓报告）")
     log(f"停滞判定: 空闲 {STALL_TIMEOUT}s / 生成中无变化 {NO_CHANGE_TIMEOUT}s")
@@ -74,18 +81,19 @@ def watch(page: Page, project: str):
     log("=" * 60)
 
     baseline_text = get_chat_text(page)
-    current_round = find_latest_round(baseline_text)
-    baseline_has_all_done = "ALL_DONE" in baseline_text
+    saved_len = len(baseline_text)
 
-    log(f"当前进度: 已完成第 {current_round} 轮")
+    log(f"基线已记录（{saved_len} 字符），等待新轮次出现...")
+
+    baseline_has_all_done = "ALL_DONE" in baseline_text
     if baseline_has_all_done:
         log("注意：基线里已有 ALL_DONE 字样，只在新增内容里检测", "WARN")
 
     idle_time = 0
     no_change_time = 0
-    last_text_len = len(baseline_text)
+    last_text_len = saved_len
     continue_count = 0
-    saved_len = len(baseline_text)
+    new_round_count = 0  # 从启动后检测到的新轮次数
 
     while True:
         try:
@@ -97,7 +105,7 @@ def watch(page: Page, project: str):
             # ---- 心跳：每 30 秒打印一次 ----
             if int(time.time()) % 30 < CHECK_INTERVAL:
                 status = "生成中" if generating else "空闲"
-                log(f"[心跳] {status} | 已完成 {current_round} 轮 | 对话 {text_len} 字")
+                log(f"[心跳] {status} | 新轮次 {new_round_count} | 对话 {text_len} 字")
 
             # ---- 检测内容变化 ----
             if text_len != last_text_len:
@@ -113,14 +121,16 @@ def watch(page: Page, project: str):
                 no_change_time = 0
                 time.sleep(5)
 
-            # ---- 检测新轮次 ----
-            latest = find_latest_round(current_text)
-            if latest > current_round:
-                log(f"=== 第 {latest} 轮完成 ===")
-                saved_len = text_len
-                current_round = latest
-                continue_count = 0
-                no_change_time = 0
+            # ---- 检测新轮次（只在新增内容里找）----
+            if "ROUND_" in new_text and "_DONE" in new_text:
+                round_match = re.search(r"ROUND_(\d+)_DONE", new_text)
+                if round_match:
+                    round_num = int(round_match.group(1))
+                    new_round_count += 1
+                    log(f"=== 检测到新轮次标记：ROUND_{round_num}_DONE（累计 {new_round_count} 轮）===")
+                    saved_len = text_len
+                    continue_count = 0
+                    no_change_time = 0
 
             # ---- 检测 ALL_DONE ----
             if baseline_has_all_done:
@@ -163,8 +173,11 @@ def main():
     global STALL_TIMEOUT, MAX_CONTINUE
     parser = argparse.ArgumentParser(description="元宝审计保姆脚本")
     parser.add_argument("--project", choices=["AF", "DB", "MA"], default="AF")
+    parser.add_argument("--start-round", type=int, default=0,
+                        help="起始轮次（0=自动从页面读取；换项目时手动指定）")
     parser.add_argument("--stall-timeout", type=int, default=STALL_TIMEOUT)
     parser.add_argument("--max-continue", type=int, default=MAX_CONTINUE)
+    parser.add_argument("--url", type=str, default="", help="指定元宝对话 URL（默认自动找最新的）")
     args = parser.parse_args()
 
     STALL_TIMEOUT = args.stall_timeout
@@ -172,21 +185,41 @@ def main():
 
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp(CDP_URL)
-        page = None
+
+        # 列出所有元宝对话页面
+        yuanbao_pages = []
         for ctx in browser.contexts:
             for pg in ctx.pages:
                 if "yuanbao.tencent.com/chat" in pg.url:
+                    yuanbao_pages.append(pg)
+
+        print(f"[诊断] 找到 {len(yuanbao_pages)} 个元宝对话页面:")
+        for i, pg in enumerate(yuanbao_pages):
+            title = pg.title()
+            print(f"  [{i}] {title[:40]}...")
+            print(f"      URL: {pg.url[:80]}...")
+
+        # 选页面：指定 URL 优先，否则选最后一个（最新打开的）
+        page = None
+        if args.url:
+            for pg in yuanbao_pages:
+                if args.url in pg.url:
                     page = pg
                     break
-            if page:
-                break
-
-        if not page:
+            if not page:
+                print(f"[错误] 没找到包含 '{args.url}' 的页面", "ERROR")
+                sys.exit(1)
+        elif yuanbao_pages:
+            page = yuanbao_pages[-1]  # 最后一个 = 最新打开的
+            print(f"[诊断] 使用最新打开的页面: {page.title()[:40]}...")
+        else:
+            log("没找到元宝聊天页面！", "ERROR")
+            sys.exit(1)
             log("没找到元宝聊天页面！", "ERROR")
             sys.exit(1)
 
         log(f"页面: {page.title()}")
-        watch(page, args.project)
+        watch(page, args.project, start_round=args.start_round)
 
 
 if __name__ == "__main__":

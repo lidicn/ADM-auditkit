@@ -316,9 +316,9 @@ def main() -> int:
     for p in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p.parts):
             continue
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         rel = str(p.relative_to(root))
         files += 1

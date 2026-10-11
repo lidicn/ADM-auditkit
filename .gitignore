@@ -31,3 +31,12 @@ proposals/
 # 二进制产物
 *.zip
 
+# 容器部署特定凭据（authorized_keys 含本机/元宝公钥，部署相关，不进通用框架仓库）
+authorized_keys
+
+# 浏览器自动化缓存（yuanbao_watcher 用，32M）
+.browser_profile/
+
+# 元宝在线沙箱审计归档（历史产物，非框架本体）
+经验/
+

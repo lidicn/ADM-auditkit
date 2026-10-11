@@ -27,6 +27,13 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 
 def _is_dynamic(fn) -> bool:
     """含 *args / **kwargs 的函数跳过（静态无法判定）。"""
@@ -521,9 +528,9 @@ def main() -> int:
     for p in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p.parts):
             continue
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         idx.add(str(p.relative_to(root)), tree)
 

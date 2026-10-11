@@ -26,6 +26,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 OPEN_ACQUIRE = {"open", "os.open", "os.fdopen"}
 TMP_ACQUIRE = {"mkstemp", "mkdtemp", "NamedTemporaryFile"}
 
@@ -320,9 +327,9 @@ def main() -> int:
     for p in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p.parts):
             continue
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         rel = str(p.relative_to(root))
         files += 1

@@ -24,6 +24,13 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 
 def _walk_bodies(node):
     """yield (body_list, owner_name) 便于逐块检查不可达。"""
@@ -126,12 +133,13 @@ def _collect(root: Path):
     for p in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p.parts):
             continue
-        try:
-            t = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        t, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         trees[str(p.relative_to(root))] = t
-        texts[str(p.relative_to(root))] = p.read_text(errors="ignore")
+        txt, _ = C.read_source(p)
+        texts[str(p.relative_to(root))] = txt if txt is not None else ""
     return trees, texts
 
 

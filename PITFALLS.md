@@ -142,6 +142,7 @@ re.search(r"@\w+\.(get|post)\(", ast.unparse(decorator))   # ← 永远不匹配
 | semgrep 在沙箱反复装坏（pip 中断导致缺 `semdep.parsers.util`） | 主力分析改用**纯 stdlib AST**，不依赖外部工具 |
 | 混合返回分析器首版 92 条 → 修正终止性判断后 19 条 → 抽样 6 条全误报 | 精度不足的产物**不应采纳进结论**，如实写进报告 |
 | 第十九轮 RMW-02 `re.error` 静默跳过 5 个模块 | `[warn]` 不能只打印，要计入退出码 |
+| A13 selftest 全 20 分析器 dirty 0 命中（但 golden 全绿） | 样本带 BOM + `read_text(errors="ignore")` 不带 encoding → BOM 字符让 ast.parse 抛 SyntaxError → `except SyntaxError: continue` 三重静默。防静默失效的门禁自己静默失效了。收口到 `_common.read_source()` 用 `utf-8-sig` 去 BOM，解析失败打 `[warn]` 计入 FAIL；门禁加三态（tools_missing/ok_but_no_hit/ok） |
 
 ---
 
@@ -185,6 +186,23 @@ re.search(r"@\w+\.(get|post)\(", ast.unparse(decorator))   # ← 永远不匹配
 `self.X = {}` 是 `ast.List` / `ast.Dict` **字面量，不是 Call** → 全部漏检。
 这是最常见的容器初始化形态，属重大盲区。修法：同时接受
 `isinstance(n.value, (ast.List, ast.Dict, ast.Set, ast.ListComp))`。
+
+**N9｜`read_text(errors="ignore")` 不带 encoding → BOM 致全分析器静默 0 命中**
+20 个 legacy 分析器统一用 `ast.parse(p.read_text(errors="ignore"))` + `except SyntaxError: continue`。
+当源文件带 UTF-8 BOM（`EF BB BF`）时：
+- `read_text` 不带 encoding 走 `locale.getpreferredencoding()`
+- BOM 字节经解码变成 `U+FEFF` 字符进入源文本
+- `ast.parse` 抛 `SyntaxError: invalid non-printable character U+FEFF`（**跨平台一致**，Python 行为非 OS 行为）
+- `except SyntaxError: continue` 静默吞掉 → 该文件 0 命中
+
+**最讽刺的后果**：防静默失效的门禁（selftest）自己静默失效了——全 20 分析器 dirty 0 命中，
+但 golden 全绿，drift 报 51 条"规则消失"红警。PITFALLS N1（头号事故）的现实复现。
+- 修法：收口到 `_common.read_source()` 用 `encoding="utf-8-sig"`（自动去 BOM），
+  解析失败返回 error 而非 `except: continue`；调用方打 `[warn]` 到 stderr，
+  `run_selftest.py` 统计 warn_count 做三态诊断（tools_missing/ok_but_no_hit/ok）。
+- 通则：**`errors="ignore"` 是静默失效的温床，凡用必配 `encoding="utf-8-sig"`，
+  且失败必须打印 `[warn]` 而非静默 continue。**
+  `engine/helpers.py:load_files()` 早已是正确范本，legacy 层漏改。
 
 ### 假阳性（续）
 

@@ -25,6 +25,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+try:
+    from . import _common as C
+except ImportError:                      # 直接以脚本方式运行时
+    import sys as _s, pathlib as _p
+    _s.path.insert(0, str(_p.Path(__file__).resolve().parent))
+    import _common as C
+
 TODO_HINT = re.compile(r"(TODO|FIXME|XXX|HACK|WIP|暂未实现|待实现|未完成)")
 
 
@@ -144,9 +151,9 @@ def check_test_assert_density(tests: Path):
     if not tests.exists():
         return out
     for p in sorted(tests.rglob("test_*.py")):
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
         testfns = [f for f in ast.walk(tree)
                    if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -210,11 +217,11 @@ def main() -> int:
     for p in sorted(root.rglob("*.py")):
         if any(x.startswith("test") for x in p.parts):
             continue
-        try:
-            tree = ast.parse(p.read_text(errors="ignore"))
-            raw = p.read_text(errors="ignore")
-        except SyntaxError:
+        tree, perr = C.parse_source(p)
+        if perr:
+            sys.stderr.write(f"[warn] parse {p}: {perr}\n")
             continue
+        raw, _ = C.read_source(p)
         rel = str(p.relative_to(root))
         files += 1
         for c in (check_todo_markers, check_not_implemented, check_empty_implementation):
