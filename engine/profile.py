@@ -17,6 +17,9 @@ from typing import Any
 DEFAULT_SKIP_DIRS = (
     ".git", "__pycache__", "node_modules", ".venv", "venv", "dist", "build",
     "vendor", "target", "site-packages", ".tox", ".mypy_cache", ".pytest_cache",
+    # 审计范围污染防护（2026-10-12 实证：memory-agent 93% 命中来自 .qoder/
+    # 整库副本，doubao-butler 34% 来自 workorders/tmp/；tmp 为通用暂存约定）
+    ".qoder", "workorders", "tmp",
 )
 
 

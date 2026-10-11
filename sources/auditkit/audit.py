@@ -106,10 +106,16 @@ def sh(cmd: list[str], cwd: str | None = None, timeout: int = 900) -> tuple[int,
                     continue
         return _RC_UNAVAILABLE, f"TOOL_UNAVAILABLE: {cmd[0]}"
 
+# 2026-10-12：整库副本/暂存目录防污染（实证：memory-agent 93%、doubao-butler 34%
+# 的轮次命中来自 .qoder/、workorders/tmp/ 下的陈旧整库拷贝）。无论调用方传什么
+# excludes 都强制排除，避免 17 处调用点漏改。
+_ALWAYS_SKIP = {".git", "__pycache__", ".qoder", "workorders", "tmp"}
+
 def pyfiles(root: Path, excludes=(".git", "__pycache__", "vendor", ".norm", "node_modules")) -> list[Path]:
     out = []
+    skip = set(excludes) | _ALWAYS_SKIP
     for r, ds, fs in os.walk(root):
-        ds[:] = [d for d in ds if d not in excludes]
+        ds[:] = [d for d in ds if d not in skip]
         for f in fs:
             if f.endswith(".py"):
                 out.append(Path(r) / f)

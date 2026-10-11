@@ -139,7 +139,7 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
                 continue
         scanned_files += 1
         try:
-            src = path.read_text(encoding="utf-8", errors="replace")
+            src = path.read_text(encoding="utf-8-sig", errors="replace")
         except OSError:
             continue
         from .base import parse_unit

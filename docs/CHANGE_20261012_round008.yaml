@@ -1,0 +1,86 @@
+# 提案包变更说明 · round-008 跨项目审计沉淀（Claude Code）
+# 提交人：Claude Code · ADM-auditkit 审计 agent
+# 日期：2026-10-12
+# 注：与同目录下「提案包_round008_20261012/」（DeepSeek++ 署名）独立，互不覆盖。
+#     两份对 atomic_json.py 的结论相反（本提案判假阳性，彼提案判真缺陷），
+#     见 README_提交说明.md 的分歧说明。
+
+proposal:
+  id: round008-cross-project-rules-claude
+  title: "round-008 跨项目审计沉淀：3 条新规则 + 假阳性修复经验"
+  type: rules
+  intent: discovery
+  date: 2026-10-12
+
+summary: |
+  2026-10-12 跨项目审计（10 项目）沉淀的可机械化发现。
+  来源集中在 DeskPilot（Electron+Python）和 doubao-butler 的 auditkit 扫描。
+  三条新规则覆盖 auditkit 当前盲区：
+    1. async def 内同步阻塞调用卡死事件循环（FastAPI 稳定性头号陷阱）
+    2. open() 不用 with 传 Popen stdout/stderr 后父进程不关句柄
+    3. while True 循环调 C SDK 无总超时守卫
+  假阳性修复经验（4 条）回灌现有规则，降低噪音。
+
+new_rules:
+  - id: py.async_def_sync_block
+    file: rules_generic/py_async_def_sync_block.py
+    severity: high
+    status: active
+    source: "DeskPilot desktop_agent.py:655（critical）+ ws.py:175（high）"
+    coverage: "doubao-butler 端到端验证：生产代码 62 条命中（待 triage），tests/ 123 条"
+    selftest: PASS
+    known_limitation: "ctypes 调用经中间变量赋值后无法静态追踪（receiver 是 Name 局部变量）"
+
+  - id: py.open_no_close_to_popen
+    file: rules_generic/py_open_no_close_to_popen.py
+    severity: high
+    status: active
+    source: "DeskPilot service.py:173 + supervisor.py:98"
+    coverage: "doubao-butler 端到端验证：0 命中（该项目不用此模式）——规则未静默失效，selftest 全 PASS"
+    selftest: PASS
+
+  - id: py.sdk_while_no_timeout
+    file: rules_generic/py_sdk_while_no_timeout.py
+    severity: high
+    status: testing  # 信号型，需端到端验证噪音后转 active
+    source: "DeskPilot xfyun_msc.py:179/276 + voice_iat.py:136"
+    coverage: "doubao-butler 端到端验证：0 命中（无讯飞 SDK）——selftest 全 PASS，规则未失效"
+    selftest: PASS
+    known_limitation: "SDK 函数名集合以讯飞 MSC 为主，需扩展其他 C SDK（curl/openssl 轮询等）"
+
+false_positive_fixes:
+  # 以下为 round-008 triage 发现的假阳性，记录为现有规则的改进方向（未在本提案改源文件）
+  - rule: py.unbounded_container
+    issue: "漏认 *_max 字段名（history_max/demote_errors_max）和尾部裁剪表达式"
+    evidence: "AutoForge af_health._history（history_max=4096 裁剪）被判无界（假阳性）"
+    fix_direction: "界化识别扩展认 *_max 字段名 + del self.X[:-N] 尾部裁剪"
+
+  - rule: py.unbounded_container
+    issue: "mock/fake/test 桩类被判无界"
+    evidence: "AutoForge MockAdapter.calls、FakeHAAdapter.calls 等测试桩假阳性"
+    fix_direction: "类名含 Mock/Fake/Stub/Test 前缀时降级或排除"
+
+  - rule: py.rmw_silent_empty
+    issue: "局部变量解析失败赋默认值被误判为读-改-写抹历史"
+    evidence: "doubao-butler llm.py:210（json.loads 解析工具参数 except: args={}）假阳性"
+    fix_direction: "赋值目标是局部变量且不在同一作用域回写持久状态时不报"
+
+  - rule: py.fixed_tmp_replace_nonatomic
+    issue: "有意固定名设计被误判"
+    evidence: "doubao-butler atomic_json.py docstring 明写固定名有意（防孤儿文件堆积）"
+    fix_direction: "建被调方语义索引，docstring 含固定名设计声明时降级"
+
+platform_issues:
+  - issue: "triage 子命令找不到 core/triage.py"
+    impact: "裁决落盘功能不可用"
+  - issue: "ADM-auditkit config path 不存在，自审需 --path /app"
+    impact: "round-all 因它 exit=2 导致整体 exit=1"
+  - issue: "memory-agent 扫描含 .qoder/tmp-* 临时副本噪音"
+    impact: "4592 py 文件 / 144 万行（主源码远小于此），噪音淹没真信号"
+  - issue: "af.mcp_tool_no_timeout applies_to=AutoForge 但在 doubao-butler 命中（规则越界）"
+    impact: "判据局部性问题（见 criterion-locality-proposal）"
+
+tests_required:
+  - 3 条新规则 selftest 已 PASS（dirty 全命中、clean 全 0 命中）
+  - py.async_def_sync_block doubao-butler 端到端 62 条生产命中，待 triage 区分真缺陷/合理用法
+  - py.open_no_close_to_popen / py.sdk_while_no_timeout 在 doubao-butler 0 命中（未失效，项目不产生该形态）

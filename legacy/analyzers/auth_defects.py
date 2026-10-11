@@ -55,8 +55,6 @@ def _chain(n: ast.Call) -> str:
             parts.append(cur.id)
             return ".".join(reversed(parts))
         return ".".join(reversed(parts))
-    if parts:
-            return ".".join(reversed(parts))
     return ""
 
 

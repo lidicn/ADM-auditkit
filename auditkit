@@ -30,6 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 CORE = ROOT / "core"
+ENGINE = ROOT / "engine"
 CONFIG = ROOT / "config"
 # 环境变量覆盖：容器内 /workspace 只读时，设 AUDITKIT_PROJECTS_DIR=/audit-out/projects
 # 让 round 产物写到可写卷（开发规范 §1：NAS 是运行环境，产物落可写区）
@@ -457,7 +458,7 @@ def cmd_propose(args) -> int:
 
 def cmd_diff(args) -> int:
     """P0-2：命中集 diff —— 规则/共享判据变更后分钟级验证。"""
-    cmd = [sys.executable, str(CORE / "hit_set_diff.py"), args.project,
+    cmd = [sys.executable, str(ENGINE / "hit_set_diff.py"), args.project,
            str(args.round_a), str(args.round_b)]
     p = subprocess.run(cmd, capture_output=True, text=True)
     print(p.stdout)
@@ -468,7 +469,7 @@ def cmd_diff(args) -> int:
 
 def cmd_triage(args) -> int:
     """P1-1：triage 裁决落盘。"""
-    cmd = [sys.executable, str(CORE / "triage.py"), args.triage_cmd]
+    cmd = [sys.executable, str(ENGINE / "triage.py"), args.triage_cmd]
     if args.project:
         cmd.append(args.project)
     if args.rule:
@@ -490,7 +491,7 @@ def cmd_triage(args) -> int:
 
 def cmd_scout(args) -> int:
     """手猎轮：初始化四件套。"""
-    cmd = [sys.executable, str(CORE / "scout.py"), args.project]
+    cmd = [sys.executable, str(ENGINE / "scout.py"), args.project]
     p = subprocess.run(cmd, capture_output=True, text=True)
     print(p.stdout)
     if p.stderr:
@@ -500,7 +501,7 @@ def cmd_scout(args) -> int:
 
 def cmd_reconcile(args) -> int:
     """对账：手猎结论 vs 工具结论。"""
-    cmd = [sys.executable, str(CORE / "reconcile.py"), args.project, "--round", str(args.round)]
+    cmd = [sys.executable, str(ENGINE / "reconcile.py"), args.project, "--round", str(args.round)]
     p = subprocess.run(cmd, capture_output=True, text=True)
     print(p.stdout)
     if p.stderr:

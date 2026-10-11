@@ -69,6 +69,7 @@ SKIP_DIRS = {
     ".git", "__pycache__", "node_modules", ".venv", "venv", "dist", "build",
     ".mypy_cache", ".pytest_cache", ".ruff_cache", "site-packages", ".tox",
     "egg-info", ".idea", ".vscode", "vendor", "target",
+    ".qoder", "workorders", "tmp",
 }
 
 
