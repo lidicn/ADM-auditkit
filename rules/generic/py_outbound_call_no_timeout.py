@@ -58,6 +58,15 @@ class OutboundCallNoTimeoutRule(BaseRule):
             return False
         tail = chain.split(".")[-1]
         low = chain.lower()
+
+        # 排除 dict/映射访问（.get() 是内存操作，不是外部调用）
+        if tail == "get":
+            return False
+
+        # Popen 构造器本身非阻塞，timeout 只适用于 .wait()/.communicate()
+        if tail == "popen":
+            return False
+
         if tail in URL_TAILS:
             return True
         if tail in SUBPROC_TAILS and "subprocess" in low:

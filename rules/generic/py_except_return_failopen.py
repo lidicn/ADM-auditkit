@@ -16,6 +16,12 @@ from engine.helpers import own_walk, all_walk, has_trace
 
 _FAIL_OPEN = {"True": "放行 / 命中 / 通过", "1": "成功"}
 
+# 函数名/上下文表明 True=告警方向（fail-closed），不是放行方向
+_FAIL_CLOSED_HINTS = (
+    "canary", "drift", "held", "occupied", "conflict",
+    "has_", "is_", "check_", "detect_", "detect",
+)
+
 
 class ExceptReturnFailopenRule(BaseRule):
     id = "py.except_return_failopen"
@@ -67,6 +73,11 @@ class ExceptReturnFailopenRule(BaseRule):
         scopes = [n for n in all_walk(tree)
                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         for scope in scopes:
+            func_name = scope.name.lower()
+            # 语义判据：函数名表明 True=告警方向（fail-closed），不判 fail-open
+            is_fail_closed = any(hint in func_name for hint in _FAIL_CLOSED_HINTS)
+            if is_fail_closed:
+                continue
             for h in own_walk(scope):
                 if not isinstance(h, ast.ExceptHandler):
                     continue
