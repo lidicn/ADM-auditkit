@@ -214,6 +214,17 @@ def cmd_round(args) -> int:
         subprocess.run([sys.executable, str(agg), str(round_dir / "findings"),
                         str(round_dir)], capture_output=True, text=True)
 
+    # 5) 生成人类可读 markdown 报告（投递开发者路径用）
+    rep = CORE / "report.py"
+    if rep.exists():
+        subprocess.run([sys.executable, str(rep), str(round_dir), name],
+                       capture_output=True, text=True)
+        rp = round_dir / "report.md"
+        if rp.exists():
+            print(f"  报告: {rp}")
+            # 投递提示：report.md 在 round_dir 里，宿主机侧 deliver_report.sh 会拷到
+            # 目标项目 doc/审计报告/（容器内 /targets 只读，不能直接写）
+
     print(f"\n── 完成 → {round_dir}")
     return 0
 
