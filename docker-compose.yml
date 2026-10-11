@@ -8,7 +8,7 @@ services:
     container_name: auditkit
     restart: "on-failure:3"
     volumes:
-      - /vol1/1000/docker/ADM-auditkit:/app:ro                # 框架只读
+      - /vol1/1000/docker/ADM-auditkit:/app                # 框架可写（产物落 projects/）
       - /vol1/1000/docker/autoforge:/data/workspace/audit/src:ro    # AutoForge
       - /vol1/1000/docker/doubao-butler:/data/workspace/repos/doubao-butler:ro
       - /vol1/1000/docker/memory-agent:/data/workspace/repos/memory-agent:ro
