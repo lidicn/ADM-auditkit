@@ -1,7 +1,8 @@
 # ADM 审计工作流 —— 目标项目登记表
 #
 # 说明：
-#   - `path` 是本地副本路径。仓库未克隆时 auditkit 会提示而非静默跑空。
+#   - `path` 是容器内路径。所有项目统一挂载在 /data/workspace/repos/ 下（只读）。
+#   - 新增项目：把代码放到 NAS /vol1/1000/docker/<项目名>/，然后在这里加配置即可。
 #   - `focus` 列出该项目的重点分析器（其余照跑，只是报告里优先展示）。
 #   - 技术栈信息来自公开资料与画像探测；`known_stack` 仅作人工参考，
 #     实际判定以 `auditkit profile` 输出为准（避免把外部资料当事实）。
@@ -14,22 +15,20 @@ projects:
   # ── 参考实现 / 工作流来源 ─────────────────────────────────────────
   AutoForge:
     repo: https://github.com/lidicn/AutoForge
-    path: /data/workspace/audit/src
+    path: /data/workspace/repos/autoforge
     known_stack: "Python / FastAPI / MCP / React；v0.8.0 服务层鉴权"
     note: "二十轮审计已完成，21 项缺陷全部 still_open。作为工作流的能力基线。"
     focus: [rmw_consistency, auth_defects, observability_defects, state_defects]
 
-  # ── 目标项目 ─────────────────────────────────────────────────────
+  # ── ADM 三个核心项目 ──────────────────────────────────────────────
   ADM-auditkit:
     repo: https://github.com/lidicn/ADM-auditkit
     path: /data/workspace/repos/ADM-auditkit
-    known_stack: "Python LLM 评估框架；5 阶段流水线 Dataset→Adapter→Model→Metrics→RunResult"
+    known_stack: "Python 审计工作流；四层架构 L0-L3；多项目统一 CLI"
     note: >
-      模块密集（adapter/annotator/evaluator/scorers/scoring/redteam/scenarios 等）。
-      评估类框架的特有风险：外部模型调用无超时、评分逻辑浮点比较、
-      缓存键不含模型版本（换模型仍读旧结果）、报告生成部分失败不留痕。
-    focus: [input_defects, time_numeric_defects, serialization_defects,
-            observability_defects, consistency_defects]
+      审计平台自身。特有风险：规则静默失效、AST 解析崩溃被吞、
+      判据越界、规则可移植性问题、propose 收集改动文件失败。
+    focus: [input_defects, observability_defects, consistency_defects]
 
   doubao-butler:
     repo: https://github.com/lidicn/doubao-butler
@@ -53,6 +52,31 @@ projects:
       外部 LLM 端点失败时 LangGraph 节点状态不一致、compose 特权/网络配置。
     focus: [boundary_defects, time_numeric_defects, concurrency_defects,
             observability_defects, errorhandling_defects]
+
+  # ── 新增审计目标（十个项目批量审计）──────────────────────────────
+  PosterWall:
+    repo: ""
+    path: /data/workspace/repos/PosterWall
+    known_stack: "待探测"
+    note: "新增审计目标，首次执行先跑 profile 探测技术栈。"
+    focus: []
+
+  tvpilot:
+    repo: ""
+    path: /data/workspace/repos/tvpilot
+    known_stack: "待探测"
+    note: "新增审计目标，首次执行先跑 profile 探测技术栈。"
+    focus: []
+
+  # 以下项目在 NAS 上路径待确认，先用 --path 临时指定
+  # deepseek-pp:
+  #   path: /data/workspace/repos/deepseek-pp
+  # deepseek-studio:
+  #   path: /data/workspace/repos/deepseek-studio
+  # DeskPilot:
+  #   path: /data/workspace/repos/DeskPilot
+  # xiaotiancai:
+  #   path: /data/workspace/repos/xiaotiancai
 
 defaults:
   skip_dirs: [.git, __pycache__, node_modules, .venv, venv, dist, build,
