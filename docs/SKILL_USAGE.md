@@ -5,6 +5,26 @@
 
 ---
 
+## 〇、连接方式（先连到 NAS）
+
+审计容器跑在 NAS 上，先 SSH 连进去：
+
+```bash
+# SSH 配置（本机 ~/.ssh/config 里已配好）
+Host nas
+    HostName 192.168.2.200
+    User lidicn
+    IdentityFile ~/.ssh/id_ed25519
+    Port 22
+
+# 连接
+ssh nas
+```
+
+连上后，所有审计命令通过 `docker exec` 执行。
+
+---
+
 ## 一、平台架构
 
 ```
@@ -22,10 +42,10 @@ L3 规则层：你写的新规则放这里
 
 ```bash
 # 跑一轮基线，看现有规则命中了什么
-docker exec auditkit python3 /app/auditkit round AutoForge --round 1
+ssh nas "docker exec auditkit python3 /app/auditkit round AutoForge --round 1"
 
 # 看报告
-docker exec auditkit cat /app/projects/AutoForge/round-001/report.md
+ssh nas "docker exec auditkit cat /app/projects/AutoForge/round-001/report.md"
 ```
 
 ### 报告里要找什么
@@ -132,7 +152,7 @@ class YourNewRule(BaseRule):
 写完规则后，**必须**跑自检，确认规则没静默失效：
 
 ```bash
-docker exec auditkit python3 /app/auditkit selftest
+ssh nas "docker exec auditkit python3 /app/auditkit selftest"
 ```
 
 自检会跑你的 dirty/clean 样本，确认：
@@ -147,10 +167,10 @@ docker exec auditkit python3 /app/auditkit selftest
 
 ```bash
 # 跑一轮真实项目，看新规则命中了多少
-docker exec auditkit python3 /app/auditkit round AutoForge --round 2
+ssh nas "docker exec auditkit python3 /app/auditkit round AutoForge --round 2"
 
 # 看报告里你的新规则命中了什么
-docker exec auditkit cat /app/projects/AutoForge/round-002/report.md | grep your_new_rule
+ssh nas "docker exec auditkit cat /app/projects/AutoForge/round-002/report.md | grep your_new_rule"
 ```
 
 ---
