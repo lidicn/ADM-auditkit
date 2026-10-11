@@ -7,6 +7,10 @@
   2. 把「分析器脚本 + 目录扫描」收缩成 run(tree, profile, adapter) -> list[Finding]：
      只处理一棵 AST，文件遍历交给 L1 引擎（engine/static_ast_mode.py）。
   3. 自带 dirty/clean 样本：加载期自动验证，dirty 必命中、clean 必不命中。
+
+v1.0.1：配套 legacy/_common.is_bounded 修复（注解赋值 `self.X: deque[T] =
+deque(maxlen=)` 此前漏判，AutoForge round-005 把 af_bus.emitted（已有界）误报），
+新增 clean 样本 bounded-deque-annotated 锁住该形态。
 """
 from __future__ import annotations
 
@@ -18,6 +22,9 @@ from pathlib import Path
 from engine.base import BaseRule, Finding, node_source
 
 _GROWTH_RE = r"self\.{name}\.(append|extend|add|insert|update|setdefault)\b"
+
+# 整体替换型容器：有 reset/clear 调用，说明是整体替换而非单调累加
+_RESET_RE = r"self\.{name}\.(reset|clear)\b"
 
 
 def _load_common():
@@ -49,7 +56,7 @@ class UnboundedContainerRule(BaseRule):
     mode = "static_ast"
     severity = "high"
     status = "active"
-    version = "1.0.0"
+    version = "1.0.1"
     tests = {
         "dirty": [
             {"name": "append-no-removal", "code": (
@@ -67,6 +74,13 @@ class UnboundedContainerRule(BaseRule):
                 "        self.records = deque(maxlen=100)\n"
                 "    def add(self, x):\n"
                 "        self.records.append(x)\n")},
+            {"name": "bounded-deque-annotated", "code": (
+                "from collections import deque\n"
+                "class Bus:\n"
+                "    def __init__(self):\n"
+                "        self.emitted: deque[Event] = deque(maxlen=1000)\n"
+                "    def add(self, x):\n"
+                "        self.emitted.append(x)\n")},
             {"name": "has-removal-path", "code": (
                 "class Store:\n"
                 "    def __init__(self):\n"
@@ -91,6 +105,9 @@ class UnboundedContainerRule(BaseRule):
                     continue                      # 有进有出，不是单调累加
                 if _COMMON.is_bounded(scope_src, name):
                     continue                      # 已有界化证据
+                # 整体替换型容器：有 reset/clear 调用，说明是整体替换而非单调累加
+                if re.search(_RESET_RE.format(name=re.escape(name)), scope_src, re.I):
+                    continue
                 if not re.search(_GROWTH_RE.format(name=re.escape(name)), scope_src, re.I):
                     continue                      # 没有增长动作，不报
                 out.append(Finding(

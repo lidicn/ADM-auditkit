@@ -139,6 +139,18 @@ FILE_RULES = {
 NEEDS_REVIEW = {"TS-03-unhandled-promise", "GO-01-err-ignored",
                 "SH-03-no-set-e", "SH-01-unquoted-var", "TS-04-any-abuse"}
 
+# TS-03 同步 API 白名单：这些是同步操作，不是 Promise，不应判未 await
+TS03_SYNC_WHITELIST = (
+    "localStorage.", "sessionStorage.",
+    ".setItem(", ".getItem(", ".removeItem(", ".clear(",
+    "Map.", "Set.",
+    ".push(", ".pop(", ".shift(", ".unshift(", ".splice(",
+    ".slice(", ".concat(", ".filter(", ".map(", ".reduce(",
+    ".forEach(", ".find(", ".findIndex(", ".includes(", ".indexOf(",
+    ".join(", ".sort(", ".reverse(", ".keys(", ".values(", ".entries(",
+    "app.use(", "app.mount(", "app.config.",
+)
+
 
 def scan_file(path: Path, rel: str) -> list[dict]:
     try:
@@ -158,6 +170,10 @@ def scan_file(path: Path, rel: str) -> list[dict]:
                 sev = "info"
             try:
                 if re.search(pat, line):
+                    # TS-03 同步 API 白名单：排除 localStorage/Map/Array 等同步操作
+                    if rid == "TS-03-unhandled-promise":
+                        if any(sync in line for sync in TS03_SYNC_WHITELIST):
+                            continue
                     out.append({
                         "rule": rid, "severity": sev, "file": rel, "line": lineno,
                         "function": "<line>", "language": lang or path.suffix,

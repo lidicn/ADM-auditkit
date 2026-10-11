@@ -77,6 +77,10 @@ class JsonParseUnguardedRule(BaseRule):
                     continue
                 if self._in_try(fn, call):
                     continue
+                # 排除 for x in json.loads(...)：json.loads 是循环的可迭代表达式，
+                # 在循环开始前一次性解析，不是循环内逐条解析
+                if any(isinstance(lo, ast.For) and lo.iter is call for lo in loops):
+                    continue
                 if not any(any(x is call for x in ast.walk(lo)) for lo in loops):
                     continue
                 out.append(Finding(
