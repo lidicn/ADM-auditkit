@@ -195,6 +195,7 @@ def cmd_round(args) -> int:
             outdir=round_dir,
             profile_path=round_dir / "profile.json",
             extra_roots=extra_roots,
+            include_legacy=getattr(args, "legacy", False),
         )
         print(f"  分析器 {summary['analyzers_ok']}/{summary['analyzers_total']}  "
               f"findings {summary['total_findings']}  "
@@ -444,6 +445,8 @@ def main() -> int:
     p4.add_argument("name_or_path")
     p4.add_argument("--path", help="直接指定本地路径（忽略配置表）")
     p4.add_argument("--round", type=int, default=1)
+    p4.add_argument("--legacy", action="store_true",
+                    help="同时运行 legacy/ 下 19 个旧分析器（默认关闭，只跑 rules/ 新规则）")
     p4.set_defaults(func=cmd_round)
 
     p5 = sub.add_parser("status", help="查看项目缺陷台账")
