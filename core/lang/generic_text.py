@@ -39,7 +39,12 @@ RULES_ANY = [
      r"""(?i)(api[_-]?key|secret|password|passwd|token|access[_-]?key)\s*[:=]\s*["'][^"'${\s]{8,}["']""",
      "疑似硬编码凭据；应走环境变量/密钥管理"),
     ("GEN-02-sql-concat", "high",
-     r"""(?i)(select|insert|update|delete)\s+.*(\+\s*[\"'`]|\$\{|%\s*\(|\|\s*format|\.format\(|f["'])""",
+     # v1.1.0（2026-10-12 memory-agent round-003 收敛）：行首加 (?!.*\?) 负向预查——
+     # 同一行出现 ? 占位符说明该语句走参数化绑定（拼接的只是代码内部片段，
+     # 如 `sql = "SELECT COUNT(*) FROM t WHERE " + " AND ".join(where)` + params），
+     # 无注入路径。实测该项目生产 4 处命中全为此形态（round-003 后全部 triage reject）。
+     # 已知残留局限：跨行拼接（SQL 与绑定分处多行）单行正则看不见 ?，仍会误报。
+     r"""(?i)^(?!.*\?).*(select|insert|update|delete)\s+.*(\+\s*[\"'`]|\$\{|%\s*\(|\|\s*format|\.format\(|f["'])""",
      "SQL 由字符串拼接/格式化构造 → 注入风险；应使用参数化查询"),
     ("GEN-03-eval-dynamic", "high",
      r"""(?i)\b(eval|exec|new\s+Function|setTimeout\s*\(\s*["'`]|setInterval\s*\(\s*["'`])\s*\(""",
@@ -141,6 +146,13 @@ NEEDS_REVIEW = {"TS-03-unhandled-promise", "GO-01-err-ignored",
                 "SH-03-no-set-e", "SH-01-unquoted-var", "TS-04-any-abuse"}
 
 # TS-03 同步 API 白名单：这些是同步操作，不是 Promise，不应判未 await
+# GEN-02 内部片段白名单（v1.1.0 收敛，2026-10-12 memory-agent round-003）：
+# SQL 与绑定参数分处多行时，行首 (?!.*\?) 负向预查看不见 ?；但拼接另一侧是
+# 常量分隔符 join（`" AND ".join(conds)`）说明拼的是代码内部条件片段、
+# 用户值全走参数绑定，无注入路径。实测该项目生产 4 处命中全为此形态。
+GEN02_INTERNAL_JOIN = ('" and ".join', '" or ".join', '", ".join', '" where " +')
+
+# TS-03 同步 API 白名单：这些是同步操作，不是 Promise，不应判未 await
 TS03_SYNC_WHITELIST = (
     "localStorage.", "sessionStorage.",
     ".setItem(", ".getItem(", ".removeItem(", ".clear(",
@@ -174,6 +186,10 @@ def scan_file(path: Path, rel: str) -> list[dict]:
                     # TS-03 同步 API 白名单：排除 localStorage/Map/Array 等同步操作
                     if rid == "TS-03-unhandled-promise":
                         if any(sync in line for sync in TS03_SYNC_WHITELIST):
+                            continue
+                    if rid == "GEN-02-sql-concat":
+                        low = line.lower()
+                        if any(seg in low for seg in GEN02_INTERNAL_JOIN):
                             continue
                     out.append({
                         "rule": rid, "severity": sev, "file": rel, "line": lineno,

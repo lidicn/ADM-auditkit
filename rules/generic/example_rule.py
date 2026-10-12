@@ -26,6 +26,45 @@ _GROWTH_RE = r"self\.{name}\.(append|extend|add|insert|update|setdefault)\b"
 # 整体替换型容器：有 reset/clear 调用，说明是整体替换而非单调累加
 _RESET_RE = r"self\.{name}\.(reset|clear)\b"
 
+# v1.0.2（2026-10-12 memory-agent round-003 收敛）：周期方法开头的**赋值重置**
+# （`self.X = []` / `{}` / `set()`）同样是"有进有出"的形态——
+# identity.py:428 `self._needs_review = []` 每轮 reconcile 重置，
+# 旧判据只认 reset/clear 调用，把这类误报成无界累加。
+#
+# 关键陷阱：`self.X = []` 在 `__init__` 里是**容器初始化**、在业务方法里才是
+# **周期重置**，源码形状完全相同、语义相反。所以必须按 AST 判所在函数，
+# 不能用正则（第一版用正则，dirty 样本的 __init__ 初始化被误杀 → 规则 broken）。
+_INIT_METHODS = ("__init__", "__new__", "__post_init__")
+_EMPTY_LITERALS = (ast.List, ast.Dict, ast.Set)
+
+
+def _is_empty_literal(node: ast.AST) -> bool:
+    if isinstance(node, _EMPTY_LITERALS):
+        return True
+    if isinstance(node, ast.Call):
+        return getattr(node.func, "id", "") in ("list", "dict", "set")
+    return False
+
+
+def _has_assign_reset(cls_node: ast.ClassDef, name: str) -> bool:
+    """非初始化方法里是否出现 `self.<name> = []` 这类整体赋值重置。"""
+    for fn in ast.walk(cls_node):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if fn.name in _INIT_METHODS:
+            continue
+        for sub in ast.walk(fn):
+            if not isinstance(sub, ast.Assign):
+                continue
+            if not _is_empty_literal(sub.value):
+                continue
+            for target in sub.targets:
+                if (isinstance(target, ast.Attribute) and target.attr == name
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"):
+                    return True
+    return False
+
 
 def _load_common():
     """包装 legacy/analyzers/_common.py —— 复用判据，零复制。"""
@@ -56,7 +95,7 @@ class UnboundedContainerRule(BaseRule):
     mode = "static_ast"
     severity = "high"
     status = "active"
-    version = "1.0.1"
+    version = "1.0.2"
     tests = {
         "dirty": [
             {"name": "append-no-removal", "code": (
@@ -89,6 +128,15 @@ class UnboundedContainerRule(BaseRule):
                 "        self.records.append(x)\n"
                 "    def take(self):\n"
                 "        return self.records.pop()\n")},
+            {"name": "reset-by-assignment", "code": (
+                "class Reconciler:\n"
+                "    def __init__(self):\n"
+                "        self.needs_review = []\n"
+                "    def reconcile(self):\n"
+                "        self.needs_review = []\n"
+                "        return {}\n"
+                "    def collect(self, x):\n"
+                "        self.needs_review.append(x)\n")},
         ],
     }
 
@@ -107,6 +155,10 @@ class UnboundedContainerRule(BaseRule):
                     continue                      # 已有界化证据
                 # 整体替换型容器：有 reset/clear 调用，说明是整体替换而非单调累加
                 if re.search(_RESET_RE.format(name=re.escape(name)), scope_src, re.I):
+                    continue
+                # v1.0.2：周期方法开头的赋值重置（self.X = []）同属"有进有出"
+                # （AST 按所在函数判定，__init__ 里的同名赋值是初始化不算重置）
+                if _has_assign_reset(node, name):
                     continue
                 if not re.search(_GROWTH_RE.format(name=re.escape(name)), scope_src, re.I):
                     continue                      # 没有增长动作，不报
