@@ -99,6 +99,13 @@ RULES_BY_LANG = {
         ("TS-08-settimeout-no-clear", "medium",
          r"""^\s*setTimeout\s*\(""",
          "裸 setTimeout 未保存句柄 → 无法 clearTimeout；竞速/延迟模式会持续泄漏定时器"),
+        # v1.3.0（2026-10-12 deepseek-studio round-001）：.catch(() => 空值) 吞错模式——
+        # 跨项目通则"读失败不能当没有数据"的 TS 实例（配置损坏被当首次运行覆盖、
+        # stat 失败被当文件不存在）。正则会话删 err 参数并返回空字面量（null/undefined/{}/''/[]），
+        # 多行 catch 块（catch { stored = {} }）与可辨识降级（.catch(() => fallback())）不匹配。
+        ("TS-09-catch-swallows-error", "medium",
+         r"""\.catch\(\s*\(\s*\)\s*=>\s*(?:null|undefined|\{\s*\}|''|""|\[\s*\]|\(\s*\{\s*\}\s*\))""",
+         "Promise .catch 丢弃 err 并返回空字面量 → 读/解析失败被静默降级为'空结果'（应区分 ENOENT 与真正异常，或至少记录 err）"),
     ],
     "javascript": [
         ("JS-01-innerhtml", "high", r"""(?i)\.innerHTML\s*=|dangerouslySetInnerHTML""",
@@ -109,6 +116,10 @@ RULES_BY_LANG = {
         ("JS-07-settimeout-no-clear", "medium",
          r"""^\s*setTimeout\s*\(""",
          "裸 setTimeout 未保存句柄 → 无法 clearTimeout；竞速/延迟模式会持续泄漏定时器"),
+        # v1.3.0（2026-10-12）：与 TS-09 对称的 JS 版 catch 吞错模式
+        ("JS-09-catch-swallows-error", "medium",
+         r"""\.catch\(\s*\(\s*\)\s*=>\s*(?:null|undefined|\{\s*\}|''|""|\[\s*\]|\(\s*\{\s*\}\s*\))""",
+         "Promise .catch 丢弃 err 并返回空字面量 → 读/解析失败被静默降级为'空结果'"),
         ("JS-02-cmd-injection", "high",
          r"""(?i)(exec|execSync|spawn)\s*\([^)]*(\$\{|`[^`]*\$\{)""",
          "命令由模板串拼出 → 命令注入"),
@@ -142,6 +153,7 @@ EXT_LANG = {
     ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript",
     ".cjs": "javascript", ".go": "go", ".sh": "shell", ".bash": "shell",
     ".yml": "yaml", ".yaml": "yaml",
+    ".rs": "rust",
 }
 
 # 语言专属规则是否"较宽、需人工确认" —— 这些默认降为 info，避免刷屏
@@ -155,6 +167,19 @@ FILE_RULES = {
          "negate"),
         ("SH-04-no-shellcheck", "info", r"""(?m)^\s*#\s*shellcheck\s+(shell|enable|disable)""",
          "未见到 shellcheck 指令注解", "negate"),
+    ],
+    # v1.3.0（2026-10-12 deepseek-studio round-001）：Rust 用 Command::new 拉起子进程树
+    # （如 cmd /c npx tsx），关闭时 child.kill()/TerminateProcess 只杀直接子进程，孙进程成孤儿。
+    # 正确做法：Windows 用 Job Object（CREATE_JOB_OBJECT + KILL_ON_JOB_CLOSE）级联杀，
+    # 或子进程侧孤儿防护。coexist 模式＝文件同时出现「spawn」与「只 kill 单 PID」且
+    # 没有 libc::kill/Job Object 级联缓解。testing：需端到端验证噪音后在报告中转 active。
+    "rust": [
+        ("RS-01-spawn-no-kill-tree", "medium",
+         (r"Command::new", r"\.kill\(\)|child\.kill"),
+         (r"libc::kill", r"CREATE_JOB_OBJECT|JobObject|KILL_ON_JOB"),
+         "coexist",
+         "Command::new 拉起子进程树 + child.kill()/TerminateProcess 只杀直接子进程，"
+         "孙进程成孤儿；应级联杀（Job Object KILL_ON_JOB_CLOSE）或子进程侧孤儿防护"),
     ],
     "yaml": [
         ("YAML-04-no-resource-limit", "low", r"""(?im)^\s*resources\s*:\s*$""",
@@ -268,15 +293,24 @@ def scan_file(path: Path, rel: str) -> list[dict]:
             except re.error:
                 continue
     # 文件级规则
-    for rid, sev, pat, msg, mode in FILE_RULES.get(lang or "", []):
+    for entry in FILE_RULES.get(lang or "", []):
+        rid, sev, pat, msg, mode = entry[0], entry[1], entry[2], entry[3], entry[4]
+        exclude = entry[5] if len(entry) > 5 else ()
+        eff_sev = "info" if rid in NEEDS_REVIEW else sev
+        hit = False
         if mode == "negate":
-            if not re.search(pat, text):
-                out.append({
-                    "rule": rid, "severity": "info" if rid in NEEDS_REVIEW else sev,
-                    "file": rel, "line": 1, "function": "<file>",
-                    "language": lang or path.suffix, "message": msg,
-                    "snippet": f"<整个文件 {len(text.splitlines())} 行>",
-                })
+            hit = not re.search(pat, text)
+        elif mode == "coexist":
+            reqs = pat if isinstance(pat, (tuple, list)) else (pat,)
+            excls = exclude if isinstance(exclude, (tuple, list)) else ((exclude,) if exclude else ())
+            hit = (all(re.search(rq, text) for rq in reqs)
+                   and not any(re.search(ex, text) for ex in excls))
+        if hit:
+            out.append({
+                "rule": rid, "severity": eff_sev, "file": rel, "line": 1,
+                "function": "<file>", "language": lang or path.suffix, "message": msg,
+                "snippet": f"<整个文件 {len(text.splitlines())} 行>",
+            })
     return out
 
 

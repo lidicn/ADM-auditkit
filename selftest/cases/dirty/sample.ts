@@ -28,3 +28,13 @@ export function findUser(db: any, name: string) {
 export function makeToken() {
   return Math.random().toString(36) + "-session";
 }
+
+// [D-44] .catch 吞错：读失败被静默降级为"空结果"
+// 配置损坏被当首次运行覆盖、stat 失败被当文件不存在
+// （跨项目通则：读失败不能当没有数据）
+export function loadConfigSafe() {
+  return readFile("config.json").catch(() => ({}));
+}
+export function statOrNull(p: string) {
+  return fsp.stat(p).catch(() => null);
+}

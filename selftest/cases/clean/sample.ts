@@ -26,3 +26,11 @@ interface Db { query(sql: string, params: unknown[]): Promise<unknown> }
 export function findUser(db: Db, name: string) {
   return db.query("SELECT * FROM users WHERE name = $1", [name]);
 }
+
+// 正确：catch 保留 err 并上抛/记录，不静默降级为"空结果"
+export function loadConfigSafe() {
+  return readFile("config.json").catch((err) => { throw err; });
+}
+export function statOrNull(p: string) {
+  return fsp.stat(p).catch((err) => logger.warn("stat failed", err));
+}
