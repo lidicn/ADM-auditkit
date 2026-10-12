@@ -237,3 +237,55 @@ re.search(r"@\w+\.(get|post)\(", ast.unparse(decorator))   # ← 永远不匹配
    规则名 → 为什么这条在正确代码上命中仍属良性。没有理由的白名单等于放弃召回。
 10. **优先修规则，其次才加白名单。** 本轮 P14 先尝试修规则成功（clean 归零且
     dirty 未丢），P15 确实无法用规则表达才进白名单。顺序反了会积累技术债。
+
+---
+
+## 本轮（2026-10-12 · memory-agent round-003 + deepseek-studio round-003）新增
+
+### 假阴性（续）
+
+**N10｜嵌套副本污染：全局 skip_dirs 与项目级排除是两级，不能混**
+memory-agent 的 `.qoder/tmp-*`（Qoder 工具整库快照）进引擎 `DEFAULT_SKIP_DIRS`
+是对的——它是**通用暂存约定**。但 deepseek-studio 的 `deepseek-pp/` 是仓库内
+**上游解包子目录，是该项目私有目录名**：写进引擎全局 skip_dirs 违反判据
+可移植性（别的项目没有这个目录，白添一条永不命中的配置）。
+实证代价：deepseek-studio round-003 的 5,268 条命中里 **4,346 条（82%）**
+来自该副本，studio 自身真实信号只有 922 条。
+- 修法：全局 `DEFAULT_SKIP_DIRS` 只收通用约定（.git/.qoder/workorders/tmp/
+  node_modules/dist…）；**项目私有副本名写 `config/projects.yaml` 该项目的
+  排除项**。两级边界：换一个项目还成立的才配进全局。
+
+**N11｜「双传输路径口径漂移」——同一功能两条实现，护栏只装了一条**
+deepseek-studio `mcp-controller.ts`：stdio 传输的 `sendRequest` 有 30s 超时，
+**HTTP/SSE 传输的 `fetch` 什么都没有**；`connectStdio` 有 `shell: isWin`，
+`testConnection` 没有（Windows 上测试 `.cmd` 命令恒失败）。单看任一条路径
+都"没有缺失"——缺陷在**两条路径的口径差**里。
+- 修法：这类判据要按「同类外部调用点集合」比对参数（超时/清理/转义），
+  报告口径从"这里缺 X"改为"这两个调用点一个有 X 一个没有"。
+  与通则 4（判不一致而非缺失）同族，但这是**跨实现路径**的不一致。
+
+**N12｜跨语言盲区：超时/定时器类规则此前全是 Python AST**
+C3（MCP HTTP fetch 无超时）漏报的根因不是没想到，是**所有超时类规则
+（`py.outbound_call_no_timeout` / `py.http_timeout_disabled` / `py.requests_no_timeout`）
+都只解析 Python**；`generic_text` 正则层没有任何 fetch/XHR 超时模式。
+一个 TS 项目里"外部调用无超时"这一类缺陷 100% 不可见。
+- 修法：v1.2.0 已在 generic_text 补 `TS-07/JS-06-fetch-no-timeout` 与
+  `TS-08/JS-07-settimeout-no-clear`（行首裸 `setTimeout` 未保存句柄——
+  返回值没保存就无从 clearTimeout，判据结构上可靠）。
+- 通则：**每加一条 Python 专属规则，问一句"这个缺陷类在别的语言里长什么样"**。
+
+### 假阳性（续）
+
+**P16｜TS 方法签名被当作调用（`types.ts:41` 实测）**
+`TS-08` 判据是"行首裸 setTimeout"，但 TS 接口里的
+`setTimeout(callback: () => void, delayMs: number): ReturnType<typeof setTimeout>;`
+同样是行首 `setTimeout(`——**`) : 类型` 是签名特征不是调用**。
+- 修法：行级排除 `\)\s*:\s*[\w<]`（TS 方法签名/类型声明形态）。
+
+**P17｜innerHTML 的静态赋值（`innerHTML = ''` / 无插值模板串）**
+`tool-card-ui.ts:245` 把静态骨架赋给 innerHTML 被 TS-01 报——右侧是纯字符串
+字面量时没有任何可注入数据。收敛：右侧不含 `${` 且整体是字符串字面量才排除；
+含插值、`+` 拼接、函数调用或裸标识符的一律仍报（确证 C1 就是
+`buildCardHtml(...)` 这种函数调用形态）。
+- 教训：形状判据收敛时，"排除"的边界要划在**数据可信度**上（有没有外部数据
+  进入），不是划在"像不像坏味道"上。

@@ -85,10 +85,30 @@ RULES_BY_LANG = {
          "疑似未 await 的 Promise 调用（需人工确认）"),
         ("TS-04-any-abuse", "low", r""":\s*any\b|as\s+any\b""",
          "any 类型绕过类型检查"),
+        # v1.2.0（2026-10-12 deepseek-studio round-003）：跨语言「外部调用无超时」盲区。
+        # 此前所有超时类规则（py.outbound_call_no_timeout 等）都是 Python AST，
+        # TS/JS 的 fetch/axios 完全无覆盖——该项目 MCP HTTP 传输
+        # （mcp-controller.ts:304）stdio 有 30s 超时、HTTP 路径什么都没有，
+        # server 挂起即 callTool 永久 pending、agent loop 卡死（确证 C3）。
+        ("TS-07-fetch-no-timeout", "medium",
+         r"""(?i)\b(?:fetch|axios\.(?:get|post|put|delete|request|create))\s*\(""",
+         "外部 HTTP 调用行未见超时（signal/timeout/AbortSignal）——对端挂起会卡死调用方"),
+        # v1.2.0：行首裸 setTimeout（未赋值给变量）结构上不可能被 clearTimeout——
+        # 返回值没保存就无从取消。正是 Promise.race 竞速模式
+        # （mcp-controller.ts:287/365、testConnection:519）的泄漏形态。
+        ("TS-08-settimeout-no-clear", "medium",
+         r"""^\s*setTimeout\s*\(""",
+         "裸 setTimeout 未保存句柄 → 无法 clearTimeout；竞速/延迟模式会持续泄漏定时器"),
     ],
     "javascript": [
         ("JS-01-innerhtml", "high", r"""(?i)\.innerHTML\s*=|dangerouslySetInnerHTML""",
-         "直接写 innerHTML → XSS"),
+         "直接写 innerHTML → XSS；应转义或用 textContent"),
+        ("JS-06-fetch-no-timeout", "medium",
+         r"""(?i)\b(?:fetch|axios\.(?:get|post|put|delete|request|create))\s*\(""",
+         "外部 HTTP 调用行未见超时（signal/timeout/AbortSignal）——对端挂起会卡死调用方"),
+        ("JS-07-settimeout-no-clear", "medium",
+         r"""^\s*setTimeout\s*\(""",
+         "裸 setTimeout 未保存句柄 → 无法 clearTimeout；竞速/延迟模式会持续泄漏定时器"),
         ("JS-02-cmd-injection", "high",
          r"""(?i)(exec|execSync|spawn)\s*\([^)]*(\$\{|`[^`]*\$\{)""",
          "命令由模板串拼出 → 命令注入"),
@@ -143,7 +163,9 @@ FILE_RULES = {
 }
 
 NEEDS_REVIEW = {"TS-03-unhandled-promise", "GO-01-err-ignored",
-                "SH-03-no-set-e", "SH-01-unquoted-var", "TS-04-any-abuse"}
+                "SH-03-no-set-e", "SH-01-unquoted-var", "TS-04-any-abuse",
+                # v1.2.0：跨语言 fetch 无超时。跨行参数是已知盲区，只出清单不派单
+                "TS-07-fetch-no-timeout", "JS-06-fetch-no-timeout"}
 
 # TS-03 同步 API 白名单：这些是同步操作，不是 Promise，不应判未 await
 # GEN-02 内部片段白名单（v1.1.0 收敛，2026-10-12 memory-agent round-003）：
@@ -151,6 +173,18 @@ NEEDS_REVIEW = {"TS-03-unhandled-promise", "GO-01-err-ignored",
 # 常量分隔符 join（`" AND ".join(conds)`）说明拼的是代码内部条件片段、
 # 用户值全走参数绑定，无注入路径。实测该项目生产 4 处命中全为此形态。
 GEN02_INTERNAL_JOIN = ('" and ".join', '" or ".join', '", ".join', '" where " +')
+
+# TS-07/JS-06 白名单（v1.2.0，2026-10-12）：行内出现这些即视为「已设超时」。
+# fetch(url, { signal }) / axios.get(url, { timeout }) 是正确形态。
+# 已知局限：参数跨行时单行看不见（与 GEN-02 同族的跨行盲区），故该规则定
+# NEEDS_REVIEW（info 级），只做「必须人工过一遍」的清单，不直接派单。
+FETCH_TIMEOUT_KEYS = ("signal:", "signal ", "abortsignal", "abortcontroller", "timeout")
+
+# TS-01/JS-01 收敛（v1.2.0，2026-10-12 deepseek-studio round-003）：
+# 右侧是纯字符串字面量（空串/无 ${ 插值的模板串）时无任何可注入数据——
+# `innerHTML = ''` 清空与静态骨架模板不该报。含 ${ 插值、+ 拼接、
+# 函数调用或裸标识符的一律仍报（确证 C1 就是 buildCardHtml(...) 形态）。
+_LITERAL_ONLY_RE = re.compile(r"""^\s*(['"`])(?:(?!\1).)*\1\s*;?\s*$""")
 
 # TS-03 同步 API 白名单：这些是同步操作，不是 Promise，不应判未 await
 TS03_SYNC_WHITELIST = (
@@ -190,6 +224,19 @@ def scan_file(path: Path, rel: str) -> list[dict]:
                     if rid == "GEN-02-sql-concat":
                         low = line.lower()
                         if any(seg in low for seg in GEN02_INTERNAL_JOIN):
+                            continue
+                    if rid in ("TS-07-fetch-no-timeout", "JS-06-fetch-no-timeout"):
+                        low = line.lower()
+                        if any(k in low for k in FETCH_TIMEOUT_KEYS):
+                            continue
+                    if rid in ("TS-01-innerhtml", "JS-01-innerhtml"):
+                        rhs = line.split("=", 1)[1] if "=" in line else ""
+                        if "${" not in rhs and _LITERAL_ONLY_RE.match(rhs):
+                            continue
+                    if rid in ("TS-08-settimeout-no-clear", "JS-07-settimeout-no-clear"):
+                        # v1.2.1：TS 方法签名/类型声明（`setTimeout(cb: () => void, d: number): ReturnType<...>;`）
+                        # 不是调用——`) : 类型` 是签名特征。types.ts:41 实测误报。
+                        if re.search(r"\)\s*:\s*[\w<]", line):
                             continue
                     out.append({
                         "rule": rid, "severity": sev, "file": rel, "line": lineno,
