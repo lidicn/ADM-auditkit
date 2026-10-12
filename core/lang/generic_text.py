@@ -26,7 +26,8 @@ from pathlib import Path
 
 SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", "dist",
              "build", ".mypy_cache", ".pytest_cache", "vendor", "target",
-             ".ruff_cache", "site-packages", ".qoder", "workorders", "tmp"}
+             ".ruff_cache", "site-packages", ".qoder", "workorders", "tmp",
+             ".wxt", ".svelte-kit", ".nuxt", ".next", ".angular"}
 
 SCANNABLE = {".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go",
              ".rs", ".java", ".sh", ".bash", ".yml", ".yaml", ".sql", ".rb",

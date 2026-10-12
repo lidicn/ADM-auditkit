@@ -38,10 +38,7 @@ PROJECTS_DIR = Path(os.environ.get("AUDITKIT_PROJECTS_DIR") or (ROOT / "projects
 SELFTEST = ROOT / "selftest"
 
 
-def load_projects() -> dict:
-    f = CONFIG / "projects.yaml"
-    if not f.exists():
-        return {}
+def _parse_projects_yaml(f) -> dict:
     try:
         import yaml  # type: ignore
         return yaml.safe_load(f.read_text()) or {}
@@ -58,6 +55,24 @@ def load_projects() -> dict:
                 k, _, v = line.strip().partition(":")
                 out[cur][k] = v.strip().strip("\"'")
         return out
+
+
+def load_projects() -> dict:
+    """项目登记表：本地覆盖档优先（2026-10-12 路径双档）。
+
+    config/projects.yaml        部署口径，path 用容器内 /data/workspace/repos/*，入库
+    config/projects.local.yaml  本地口径，path 用 Windows E:/NAS/*，gitignore；
+                                存在时整体覆盖 projects.yaml（不是逐键合并——
+                                两档的 path 语义互斥，混用会一半可达一半不可达）
+    """
+    for name in ("projects.local.yaml", "projects.yaml"):
+        f = CONFIG / name
+        if not f.exists():
+            continue
+        data = _parse_projects_yaml(f)
+        if data:
+            return data
+    return {}
 
 
 def cmd_profile(args) -> int:

@@ -1,27 +1,27 @@
 {
-  "root": "/data/workspace/audit/src",
+  "root": "E:\\NAS\\AutoForge",
   "languages": {
     "files": {
-      "python": 305,
-      "shell": 3,
-      "yaml": 3,
+      "shell": 6,
+      "python": 419,
+      "yaml": 5,
       "typescript": 36,
-      "javascript": 11
+      "javascript": 14
     },
     "lines": {
-      "python": 78542,
-      "shell": 428,
-      "yaml": 256,
-      "typescript": 3248,
-      "javascript": 881
+      "shell": 952,
+      "python": 112450,
+      "yaml": 421,
+      "typescript": 3321,
+      "javascript": 983
     },
     "primary": "python",
     "share": {
-      "python": 0.852,
-      "typescript": 0.101,
-      "javascript": 0.031,
-      "shell": 0.008,
-      "yaml": 0.008
+      "python": 0.873,
+      "typescript": 0.075,
+      "javascript": 0.029,
+      "shell": 0.013,
+      "yaml": 0.01
     }
   },
   "frameworks": [
@@ -33,23 +33,23 @@
   ],
   "python_packages": [
     {
-      "path": "src/autoforge",
-      "modules": 69
+      "path": "src\\autoforge",
+      "modules": 73
     },
     {
-      "path": "src/autoforge/af_closedloop",
+      "path": "src\\autoforge\\af_closedloop",
       "modules": 10
     },
     {
-      "path": "src/autoforge/af_vhass",
+      "path": "src\\autoforge\\af_vhass",
       "modules": 10
     },
     {
-      "path": "src/autoforge/af_adapters",
-      "modules": 5
+      "path": "src\\autoforge\\af_adapters",
+      "modules": 6
     },
     {
-      "path": "src/autoforge/af_ir",
+      "path": "src\\autoforge\\af_ir",
       "modules": 4
     }
   ],
@@ -57,11 +57,11 @@
     "dirs": [
       {
         "path": "tests",
-        "files": 175
+        "files": 233
       },
       {
-        "path": "ui-user-mimo/tests",
-        "files": 8
+        "path": "ui-user-mimo\\tests",
+        "files": 9
       }
     ],
     "has_pytest": true
@@ -78,26 +78,30 @@
       },
       {
         "path": "scripts",
-        "count": 28
+        "count": 104
       }
     ],
     "self_check_scripts": [
-      "scripts/check_atomic_write_sites.py",
-      "scripts/check_bounded_caches.py",
-      "scripts/check_imports.py",
-      "scripts/check_ir_runtime_keys.py",
-      "scripts/check_mcp_arg_schemas.py",
-      "scripts/check_mqtt_runtime_dep.py",
-      "scripts/check_mqtt_subscriptions.py",
-      "scripts/check_mqtt_writers.py",
-      "scripts/check_param_injection.py",
-      "scripts/check_pkg_markers.py",
-      "scripts/check_snapshot_policy.py",
-      "scripts/check_states_fanout.py",
-      "scripts/check_tool_names.py",
-      "scripts/check_topic_whitelist.py",
-      "scripts/check_ui_api_paths.py",
-      "scripts/check_undefined_names.py"
+      ".venv314\\Lib\\site-packages\\homeassistant\\helpers\\check_config.py",
+      ".venv314\\Lib\\site-packages\\homeassistant\\scripts\\check_config.py",
+      "scripts\\check_atomic_write_sites.py",
+      "scripts\\check_bounded_caches.py",
+      "scripts\\check_ci_interpreter.py",
+      "scripts\\check_gates_coverage.py",
+      "scripts\\check_imports.py",
+      "scripts\\check_ir_runtime_keys.py",
+      "scripts\\check_mcp_arg_schemas.py",
+      "scripts\\check_mqtt_runtime_dep.py",
+      "scripts\\check_mqtt_subscriptions.py",
+      "scripts\\check_mqtt_writers.py",
+      "scripts\\check_observability.py",
+      "scripts\\check_oneshot_layout.py",
+      "scripts\\check_outbound_guard.py",
+      "scripts\\check_owner_subject.py",
+      "scripts\\check_param_injection.py",
+      "scripts\\check_pkg_markers.py",
+      "scripts\\check_plan_ui_claims.py",
+      "scripts\\check_process_model.py"
     ]
   },
   "entrypoints": [

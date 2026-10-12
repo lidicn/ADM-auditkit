@@ -37,6 +37,9 @@ authorized_keys
 # 浏览器自动化缓存（yuanbao_watcher 用，32M）
 .browser_profile/
 
+# 本地审计路径覆盖档（Windows E:/NAS/* 口径，勿入库；见 config/projects.yaml 头注释「路径双档」）
+config/projects.local.yaml
+
 # 元宝在线沙箱审计归档（历史产物，非框架本体）
 经验/
 

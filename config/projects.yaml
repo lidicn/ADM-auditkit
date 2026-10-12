@@ -10,13 +10,28 @@
 # 更新方式：直接改本文件，或用
 #   auditkit round <name> --path /some/where   临时指定未登记项目
 
+#
+# 【2026-10-12 二次修订】路径双档：一个文件管两边必然弄坏一边，故拆分为
+#   config/projects.yaml        部署口径，path 用容器内 /data/workspace/repos/*，入库
+#   config/projects.local.yaml  本地口径，path 用 Windows E:/NAS/*，已 gitignore；
+#                               auditkit 的 load_projects() 发现它时整体覆盖本文件
+# 背景：/data/workspace/repos 是 NAS 部署副本，与开发者本机工作副本已分叉，
+# 审部署副本等于审运行态而非源码态——本机审计必须走本地路径；
+# 但把本地路径写进本文件会让容器内 10 个项目全部不可达（2026-10-12 实测教训）。
+# known_stack 全部按 `auditkit profile` 实测回填（原值多处与事实不符，例如
+# memory-agent 被写成 Chainlit+LangGraph+Qdrant，实测 FastAPI+SQLite+chroma）。
+#
+# 分叉副本目录（_scratch_*/ui-user-mimo/extracted/attic/_quarantine*）
+# 已加入 defaults.skip_dirs：它们是历史拷贝，审它们会产出与运行代码无关的
+# 重复命中，稀释 triage 注意力。若将来需要审某份分叉副本，用 --path 单独指定。
+
 projects:
 
   # ── 参考实现 / 工作流来源 ─────────────────────────────────────────
   AutoForge:
     repo: https://github.com/lidicn/AutoForge
     path: /data/workspace/repos/autoforge
-    known_stack: "Python / FastAPI / MCP / React；v0.8.0 服务层鉴权"
+    known_stack: "Python 419 文件/112k 行 + TS 36；docker, fastapi, homeassistant, mqtt, pytest；包 src/autoforge(73)"
     note: "二十轮审计已完成，21 项缺陷全部 still_open。作为工作流的能力基线。"
     focus: [rmw_consistency, auth_defects, observability_defects, state_defects]
 
@@ -33,23 +48,20 @@ projects:
   doubao-butler:
     repo: https://github.com/lidicn/doubao-butler
     path: /data/workspace/repos/doubao-butler
-    known_stack: "未知 —— 公开资料未获取，按通用化处理"
+    known_stack: "Python 966 文件/173k 行；docker, fastapi, mqtt, openai, sqlite；包 butler/api(35)、butler/core(33)"
     note: >
-      技术栈未确认。首次执行必须先跑 `auditkit profile` 探测真实语言，
-      再据此判断是否适用 Python AST 分析器（不适用时以 generic_text 兜底）。
-      未探测前不得假定其为 Python 项目。
+      已画像确认为 Python 项目（不再是"未知"）。含历史分叉副本 _scratch_1002/，
+      已由 skip_dirs 排除。
     focus: []
 
   memory-agent:
     repo: https://github.com/lidicn/memory-agent
     path: /data/workspace/repos/memory-agent
-    known_stack: >
-      Python + Docker Compose；Chainlit + LangGraph + Qdrant + PostgreSQL
-      + embedding-service；OpenAI 兼容端点；读 HomeAssistant 历史时序数据
+    known_stack: "Python 409 文件/111k 行 + JS 20；fastapi, mqtt, redis, sqlite；包 src/memory_agent(82)、api(24)"
     note: >
-      多容器 + 向量库 + 长期记忆写入。特有风险：向量检索无超时/无降级、
-      记忆写入无界增长、时序数据窗口用墙上时钟、
-      外部 LLM 端点失败时 LangGraph 节点状态不一致、compose 特权/网络配置。
+      实测无 LangGraph/Qdrant/PostgreSQL（原登记表描述与事实不符，已更正）。
+      真实风险：长期记忆无界增长、向量检索无超时/无降级、周期任务无总超时、
+      外部 LLM 端点失败时状态不一致。
     focus: [boundary_defects, time_numeric_defects, concurrency_defects,
             observability_defects, errorhandling_defects]
 
@@ -57,48 +69,57 @@ projects:
   PosterWall:
     repo: ""
     path: /data/workspace/repos/PosterWall
-    known_stack: "待探测"
-    note: "新增审计目标，首次执行先跑 profile 探测技术栈。"
+    known_stack: "JavaScript 97 文件/38k 行 + Python 16/1.4k 行；fastapi, sqlite；包 server(6)"
+    note: "前端为主。当前规则库全是 Python AST，JS 侧为零覆盖——属平台盲区，非项目干净。"
     focus: []
 
-  tvpilot:
+  TVPilot:
     repo: ""
     path: /data/workspace/repos/tvpilot
-    known_stack: "待探测"
-    note: "新增审计目标，首次执行先跑 profile 探测技术栈。"
+    known_stack: "Python 69 文件/24.8k 行；homeassistant, mqtt, openai, sqlite；包 tvpilot(29)、routes(13)"
+    note: "电视端编排服务，通过 MQTT/HA 与 butler、memory-agent 联动，跨项目契约风险高。"
     focus: []
 
-  # ── 桌面端 / 电视端项目（从 Windows 拷贝到 NAS）──────────────────
+  # ── 桌面端 / 电视端项目 ───────────────────────────────────────────
   deepseek-pp:
     repo: ""
     path: /data/workspace/repos/deepseek-pp
-    known_stack: "待探测"
-    note: "桌面端应用，首次执行先跑 profile 探测技术栈。"
+    known_stack: "TypeScript 1440 文件/292k 行 + JS 1227/52k + Python 17；extracted/ 为上游解包副本"
+    note: >
+      上游 deepseek 网页端逆向复刻。extracted/src/tests(241) 与 src/tests(261)
+      两份测试并存需确认哪份在跑。Python 规则仅覆盖 17 个 py 文件。
     focus: []
 
   deepseek-studio:
     repo: ""
     path: /data/workspace/repos/deepseek-studio
-    known_stack: "待探测"
-    note: "桌面端应用，首次执行先跑 profile 探测技术栈。"
+    known_stack: "TypeScript 840 文件/166k 行 + JS 58/15k + Rust 3；入口 package.json"
+    note: >
+      Tauri v2 桌面壳。**内含嵌套的 deepseek-pp/ 子副本**（profile 探到
+      deepseek-pp/src/tests 261 个文件）——嵌套副本会导致规则重复命中与
+      "改了 A 却部署 B" 的风险。Python 规则几乎无覆盖。
     focus: []
 
   DeskPilot:
     repo: ""
     path: /data/workspace/repos/DeskPilot
-    known_stack: "待探测"
-    note: "桌面端应用，首次执行先跑 profile 探测技术栈。"
+    known_stack: "Python 155 文件/37k 行；fastapi, mqtt, openai, sqlite；包 backend/modules(33)、api/v1(29)"
+    note: >
+      Windows 工具层，端口 8765。**含系统操作端点**（lock/shutdown/restart/
+      sleep/hibernate），系统操作安全闸由 env 控制，误触发风险等级最高。
     focus: []
 
   xiaotiancai:
     repo: ""
     path: /data/workspace/repos/xiaotiancai
-    known_stack: "待探测"
-    note: "安卓电视端应用，首次执行先跑 profile 探测技术栈。"
+    known_stack: "Python 9 文件/326 行 + JS 3/2.2k 行；sqlite"
+    note: "规模极小（<1k 行），审计投入产出比低，本轮以人工确证为主。"
     focus: []
 
 defaults:
   skip_dirs: [.git, __pycache__, node_modules, .venv, venv, dist, build,
-              vendor, target, site-packages]
+              vendor, target, site-packages,
+              _scratch_1002, ui-user-mimo, extracted, attic, _quarantine,
+              _quarantine_deploy_strays_20261001, backup, backups, venv_win]
   analyzers: all
   selftest_before_round: true
