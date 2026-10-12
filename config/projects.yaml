@@ -97,7 +97,12 @@ projects:
     note: >
       Tauri v2 桌面壳。**内含嵌套的 deepseek-pp/ 子副本**（profile 探到
       deepseek-pp/src/tests 261 个文件）——嵌套副本会导致规则重复命中与
-      "改了 A 却部署 B" 的风险。Python 规则几乎无覆盖。
+      "改了 A 却部署 B" 的风险。已通过项目级 skip_dirs 排除（不进全局
+      DEFAULT_SKIP_DIRS，否则会误伤同名独立登记项目，见 PITFALLS N10）。
+      Python 规则几乎无覆盖。
+    # N10：嵌套副本两级排除。deepseek-pp 既是独立登记项目又是本目录嵌套子副本，
+    # 不能写进引擎全局 DEFAULT_SKIP_DIRS（会跳过独立项目审计），故项目级声明。
+    skip_dirs: [deepseek-pp]
     focus: []
 
   DeskPilot:

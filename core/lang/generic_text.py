@@ -196,7 +196,27 @@ TS03_SYNC_WHITELIST = (
     ".forEach(", ".find(", ".findIndex(", ".includes(", ".indexOf(",
     ".join(", ".sort(", ".reverse(", ".keys(", ".values(", ".entries(",
     "app.use(", "app.mount(", "app.config.",
+    # v1.2.2 收敛（2026-10-12 deepseek-studio round-006）：HTTP/Node/DOM 常见同步或
+    # 非 Promise API 被正则误判为"未 await 的 Promise"——这些返回值不是 Promise，
+    # 排除它们可显著降噪（实测 studio 自身 TS-03 837 条里大量是这类）。
+    # 注意：正则层无法判别"调用目标是否返回 Promise"，这是 TS-03 过宽的根因；
+    # 长期应改为 AST 语义分析，此处仅按"已知同步 API"治标。
+    ".setHeader(", ".writeHead(", ".end(", ".exit(", "process.exit(", "Sync(",
+    # DOM/集合/事件 同步方法（deepseek-studio 这类 Tauri 桌面应用前端代码大量出现）
+    ".appendChild(", ".addEventListener(", ".removeEventListener(", ".setAttribute(",
+    ".emit(", ".delete(", ".add(", ".remove(", ".replace(",
 )
+
+# TS-03 收敛（v1.2.2，2026-10-12 deepseek-studio round-003）：
+# 行内出现这些标记说明 Promise 已被处理或属于常规忽略，不作"未处理"报——
+# 否则 deepseek-studio 单项目 233 条 TS-03（占全量 94%）几乎全是噪音。
+# 这些标记不会出现在真正裸调用未处理的行里（裸调用行只有 `foo()`），
+# 故排除它们不漏真缺陷。
+#   - 子串集：.catch( 已接 then 链 / await / void 显式丢弃 / console/logger 日志 /
+#     expect( 断言
+#   - 正则集：(?<![\w.]) 边界避免 split(/wait(/respect( 等被 "it("/"expect(" 子串误伤
+TS03_OK_HINT = (".catch(", "await ", "void ", "console.", "logger.", "expect(")
+TS03_OK_HINT_RE = re.compile(r"(?<![\w.])(?:await|void|return|it|test|describe)\s*\(")
 
 
 def scan_file(path: Path, rel: str) -> list[dict]:
@@ -220,6 +240,8 @@ def scan_file(path: Path, rel: str) -> list[dict]:
                     # TS-03 同步 API 白名单：排除 localStorage/Map/Array 等同步操作
                     if rid == "TS-03-unhandled-promise":
                         if any(sync in line for sync in TS03_SYNC_WHITELIST):
+                            continue
+                        if any(h in line for h in TS03_OK_HINT) or TS03_OK_HINT_RE.search(line):
                             continue
                     if rid == "GEN-02-sql-concat":
                         low = line.lower()
@@ -259,13 +281,23 @@ def scan_file(path: Path, rel: str) -> list[dict]:
 
 
 def main() -> int:
-    root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
-    outdir = Path(sys.argv[2] if len(sys.argv) > 2 else ".")
+    args = sys.argv[1:]
+    # 项目级遍历排除（N10）：`--skip-dirs a b c` 合并到 SKIP_DIRS。
+    # 嵌套副本（如 deepseek-studio/deepseek-pp/）不进全局 SKIP_DIRS，由调用方按项目传入。
+    skip_set = set(SKIP_DIRS)
+    if "--skip-dirs" in args:
+        i = args.index("--skip-dirs")
+        extra, j = [], i + 1
+        while j < len(args) and not args[j].startswith("--"):
+            extra.append(args[j]); j += 1
+        skip_set |= set(extra)
+    root = Path(args[0] if args else ".")
+    outdir = Path(args[1] if len(args) > 1 else ".")
     outdir.mkdir(parents=True, exist_ok=True)
 
     findings, files, by_lang = [], 0, Counter()
     for dirpath, dirnames, filenames in __import__("os").walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in skip_set]
         for fn in filenames:
             p = Path(dirpath) / fn
             if p.suffix.lower() not in SCANNABLE:

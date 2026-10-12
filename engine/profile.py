@@ -95,6 +95,7 @@ class ProjectProfile:
     has_python: bool = True
     python_packages: list = field(default_factory=list)   # [{"path": "src/xx", ...}]
     gates: Gates = field(default_factory=Gates)
+    skip_dirs: list = field(default_factory=list)          # 项目级遍历排除（N10：嵌套副本等，不进全局 DEFAULT_SKIP_DIRS）
     raw: dict = field(default_factory=dict)               # 未建模的键原样保留
 
     # ── 构造 ──────────────────────────────────────────────────────────
@@ -105,7 +106,8 @@ class ProjectProfile:
     @classmethod
     def from_dict(cls, d, name: str = "", repo_root: str = "") -> "ProjectProfile":
         d = dict(d or {})
-        known = {"languages", "frameworks", "has_python", "python_packages", "gates"}
+        known = {"languages", "frameworks", "has_python", "python_packages",
+                 "gates", "skip_dirs"}
         return cls(
             name=name or str(d.get("name") or ""),
             repo_root=repo_root or str(d.get("repo_root") or d.get("repo") or ""),
@@ -114,6 +116,7 @@ class ProjectProfile:
             has_python=bool(d.get("has_python", True)),
             python_packages=[dict(p) for p in (d.get("python_packages") or []) if isinstance(p, dict)],
             gates=Gates.from_dict(d.get("gates")),
+            skip_dirs=list(d.get("skip_dirs") or []),
             raw={k: v for k, v in d.items() if k not in known},
         )
 

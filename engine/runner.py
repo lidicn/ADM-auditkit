@@ -43,14 +43,21 @@ def finding_to_legacy_dict(f: Finding) -> dict:
     }
 
 
-def run_generic_text(repo_root: Path) -> list[Finding]:
-    """运行跨语言通用层（保持原 subprocess 方式）。"""
+def run_generic_text(repo_root: Path, skip_dirs: list | None = None) -> list[Finding]:
+    """运行跨语言通用层（保持原 subprocess 方式）。
+
+    skip_dirs：项目级遍历排除（N10），透传给 generic_text.py 的 --skip-dirs。
+    嵌套副本（如 deepseek-studio/deepseek-pp/）不进全局 SKIP_DIRS（会误伤
+    同名独立登记项目），由各项目段 skip_dirs 自行声明。
+    """
     gt = CORE / "lang" / "generic_text.py"
     if not gt.exists():
         return []
     import tempfile
     with tempfile.TemporaryDirectory() as td:
         cmd = [sys.executable, str(gt), str(repo_root), str(td)]
+        if skip_dirs:
+            cmd += ["--skip-dirs"] + list(skip_dirs)
         try:
             p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         except subprocess.TimeoutExpired:
@@ -71,7 +78,8 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
               extra_roots: list[Path] | None = None,
               include_legacy: bool = False,
               file_filter: list[str] | None = None,
-              rule_filter: list[str] | None = None) -> dict:
+              rule_filter: list[str] | None = None,
+              skip_dirs: list | None = None) -> dict:
     """执行一轮审计，写入兼容格式的产物。
 
     Args:
@@ -80,6 +88,7 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
         profile_path: 画像 JSON 路径（可选）
         extra_roots: 附加扫描根（可选）
         include_legacy: 是否同时运行 legacy/ 下的旧分析器（默认 False，只跑 rules/ 新规则）
+        skip_dirs: 项目级遍历排除（N10），透传给 generic_text 与 Python 引擎
         file_filter: 只扫描这些文件（相对路径列表），None 表示全量（P1-3 delta 模式）
         rule_filter: 只跑这些规则（rule id 列表），None 表示全量（P1-3 targeted/regression 模式）
 
@@ -98,6 +107,10 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
         except Exception:
             profile = None
     prof = as_profile(profile)
+    # 项目级 skip_dirs（N10）：注入画像 profile，让 static_ast_mode 与 generic_text
+    # 都按同一份项目级排除集合工作（画像 JSON 本身不带 skip_dirs）。
+    if skip_dirs:
+        prof.skip_dirs = list(skip_dirs)
 
     # 2) 加载规则
     rules_report = load_rules()
@@ -174,8 +187,8 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
                 except Exception as e:
                     mode.diagnostics.append(f"{analyzer_name} @ {root} 失败: {e}")
 
-    # 5) 运行跨语言通用层
-    gt_findings = run_generic_text(repo_path)
+    # 5) 运行跨语言通用层（项目级 skip_dirs 透传）
+    gt_findings = run_generic_text(repo_path, skip_dirs)
 
     # 6) 合并所有 findings
     all_findings = new_rule_findings[:]

@@ -239,6 +239,8 @@ def cmd_round(args) -> int:
             else:
                 print(f"  [regression 模式] 无 bugs.json，回退全量")
 
+        # 项目级 skip_dirs 来自 projects.yaml 项目段（非画像 JSON），N10 要求
+        proj_cfg = load_projects().get("projects", {}).get(name, {})
         summary = run_round(
             repo_path=path,
             outdir=round_dir,
@@ -247,6 +249,7 @@ def cmd_round(args) -> int:
             include_legacy=getattr(args, "legacy", False),
             file_filter=file_filter,
             rule_filter=rule_filter,
+            skip_dirs=list(proj_cfg.get("skip_dirs") or []),
         )
         print(f"  分析器 {summary['analyzers_ok']}/{summary['analyzers_total']}  "
               f"findings {summary['total_findings']}  "

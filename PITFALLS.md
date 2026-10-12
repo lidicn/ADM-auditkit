@@ -254,6 +254,19 @@ memory-agent 的 `.qoder/tmp-*`（Qoder 工具整库快照）进引擎 `DEFAULT_
 - 修法：全局 `DEFAULT_SKIP_DIRS` 只收通用约定（.git/.qoder/workorders/tmp/
   node_modules/dist…）；**项目私有副本名写 `config/projects.yaml` 该项目的
   排除项**。两级边界：换一个项目还成立的才配进全局。
+- **【2026-10-12 已落地】**：引擎此前根本不消费 `config/projects.yaml` 的
+  `defaults.skip_dirs`——skip 用的是 `engine/profile.py:17` 与 `core/lang/
+  generic_text.py:27` 的**硬编码** `SKIP_DIRS`，且无项目级覆盖通道。本次实现：
+  `engine/profile.py` 的 `ProjectProfile` 加 `skip_dirs` 字段（from_dict 读取）；
+  `static_ast_mode.py:iter_sources` 合并 `prof.skip_dirs`；
+  `core/lang/generic_text.py:main` 接受 `--skip-dirs` 并合并到 walk；
+  `engine/runner.py` 的 `run_round`/`run_generic_text` 透传；`auditkit:cmd_round`
+  从**项目配置段**（非画像 JSON）取 `skip_dirs` 注入。
+  **根因坑**：`cmd_round` 里的 `profile` 是画像 JSON（`core/profile.py` 探测输出），
+  不含项目配置键——必须单独 `load_projects().projects[name]` 取。
+  效果：deepseek-studio 加 `skip_dirs: [deepseek-pp]` 后，round-006 总命中
+  5,268 → 557，deepseek-pp 路径命中 4,269 → **0**，独立项目 `deepseek-pp` 因
+  skip 走项目级而**不受影响**。
 
 **N11｜「双传输路径口径漂移」——同一功能两条实现，护栏只装了一条**
 deepseek-studio `mcp-controller.ts`：stdio 传输的 `sendRequest` 有 30s 超时，
@@ -289,3 +302,26 @@ C3（MCP HTTP fetch 无超时）漏报的根因不是没想到，是**所有超�
 `buildCardHtml(...)` 这种函数调用形态）。
 - 教训：形状判据收敛时，"排除"的边界要划在**数据可信度**上（有没有外部数据
   进入），不是划在"像不像坏味道"上。
+
+**P18｜TS-03 过宽是"正则层无法判别返回值是不是 Promise"的慢性病**
+`TS-03-unhandled-promise` 的正则是 `^\s*(?!await|return|//)[\w.]+\([^)]*\)\s*;?\s*$`——
+它只匹配"行尾直接结束的调用"，**完全不管这调用返回的是不是 Promise**。
+于是 `res.setHeader(...)`/`res.end()`/`buckets.set()`/`process.exit()`/
+`fs.mkdirSync()`/`el.appendChild()`/`emitter.emit()` 这些**同步/非 Promise 调用**
+全被误判为"未 await 的 Promise"。
+- 实证：deepseek-studio round-003 全量 5,268 命中里 **4,973 条（94%）是 TS-03**，
+  其中 studio 自身 837 条、嵌套副本 4,135 条。这是"P4（targeted 模式不过滤
+  generic_text 噪音）"长期挂账的实质——单条规则就淹没了所有真实信号。
+- **【2026-10-12 收敛】**：叠加两道白名单——① `TS03_OK_HINT`（行内有
+  `.catch(`/`await `/`void `/`console.`/`logger.`/`expect(` 或边界正则匹配
+  `await|void|return|it|test|describe` 调用，即"已被处理/常规忽略"）；② 扩大
+  `TS03_SYNC_WHITELIST` 到 HTTP/Node/DOM 同步 API（`.setHeader(`/`.writeHead(`/
+  `.end(`/`.exit(`/`process.exit(`/`Sync(`/`.appendChild(`/`.addEventListener(`/
+  `.removeEventListener(`/`.setAttribute(`/`.emit(`/`.delete(`/`.add(`/`.remove(`/
+  `.replace(`）。
+- 效果：TS-03 studio 自身 **837 → 455**（降噪 46%），叠加 N10 项目级 skip 后
+  全量 **5,268 → 557**（降噪 89%），455 条剩余多为 `fetch`/全局函数/可能 Promise 的
+  `close`/`start`/`kill`，作为 info 级（NEEDS_REVIEW）清单可接受。
+- 根治方向：**AST 语义分析**（解析调用目标类型是否返回 Promise），正则白名单是
+  治标——每加一个框架 API 就维护一次黑名单不可持续。短期把 TS-03 维持 info 级、
+  当"人工过一遍"清单即可，不要据此写"此处无缺陷"结论。

@@ -89,9 +89,13 @@ class StaticAstMode(BaseAuditMode):
         return out or [Path(repo_path)]
 
     def iter_sources(self, repo_path, profile, adapter):
+        prof = as_profile(profile)
+        # 项目级排除（N10）：嵌套副本（如 deepseek-studio/deepseek-pp/）不进全局
+        # DEFAULT_SKIP_DIRS（会误伤同名独立登记项目），由各项目段自行声明 skip_dirs。
+        skip = set(DEFAULT_SKIP_DIRS) | set(prof.skip_dirs or [])
         for root in self.scope_roots(repo_path, profile, adapter):
             for p in sorted(root.rglob("*.py")):
-                if any(part in DEFAULT_SKIP_DIRS for part in p.parts):
+                if any(part in skip for part in p.parts):
                     continue
                 try:
                     if p.stat().st_size > self.max_file_bytes:
