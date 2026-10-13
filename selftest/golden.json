@@ -12,7 +12,7 @@
   "state_defects": {
     "dirty": {
       "AFS-05-wallclock-timeout": 1,
-      "AFS-04-unguarded-load": 4,
+      "AFS-04-unguarded-load": 2,
       "AFS-03-nonatomic-write": 5,
       "AFS-01-silent-failure": 1,
       "AFS-07-io-under-lock": 1

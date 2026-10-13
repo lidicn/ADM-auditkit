@@ -190,15 +190,42 @@ def check_nonatomic_write(tree, path, rel):
 # ────────────────────────────────────────────────────────────────────
 # AFS-04 状态文件读取无异常保护 —— 损坏即崩溃，无降级
 # ────────────────────────────────────────────────────────────────────
+# AFS-04 降噪（AF-GAP-120 认实参来源）：判断 json.loads 实参是否源自"本函数内文件读"。
+# 强信号：read_text / open( / read_bytes / Path(；弱信号 .read() 需排除已知非文件
+# receiver（stdin / HTTP 响应 / SSE / socket 等）——stdin.read() 不是文件读（AF101 stdio）。
+_AFS04_NONFILE_RECV = ("stdin", "stderr", "stdout", "response", "resp", "body",
+                       "payload", "socket", "conn", "stream", "content",
+                       "text", "data", "line", "chunk", "buf", "buffer", "sock")
+
+
+def _arg_is_file_read(arg):
+    if any(k in arg for k in ("read_text", "open(", "read_bytes", "Path(")):
+        return True
+    if ".read(" in arg:
+        low = arg.lower()
+        return not any(b in low for b in _AFS04_NONFILE_RECV)
+    return False
+
+
 def check_unguarded_load(tree, path, rel):
     out = []
-    try_nodes = {id(n) for n in ast.walk(tree) if isinstance(n, ast.Try)}
     for fn in ast.walk(tree):
         if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        for n in ast.walk(fn):
-            if not isinstance(n, ast.Call):
-                continue
+        calls = [n for n in ast.walk(fn) if isinstance(n, ast.Call)]
+        # 站点级收敛：同一条 `json.loads(x.read_text())` 读链上 json.loads 与
+        # read_text 都会命中，由外层 json.loads 代表整链，内层读节点不重复报。
+        # （AF-GAP-110：族级计数与站点数系统性偏差的成因之一。）
+        consumed = set()
+        for n in calls:
+            f = n.func
+            nm = getattr(f, "id", None)
+            at = getattr(f, "attr", None)
+            if (nm == "loads" or at == "loads" or at == "load") and n.args:
+                for sub in ast.walk(n.args[0]):
+                    if isinstance(sub, ast.Call):
+                        consumed.add(id(sub))
+        for n in calls:
             f = n.func
             attr = getattr(f, "attr", None)
             name = getattr(f, "id", None)
@@ -211,22 +238,30 @@ def check_unguarded_load(tree, path, rel):
                 hit = "read_text"
             if not hit:
                 continue
+            # 被 json.loads/load 直接消费的内层读节点不重复报
+            if id(n) in consumed:
+                continue
             # 是否被任何 try 包裹
-            guarded = False
-            for t in ast.walk(fn):
-                if isinstance(t, ast.Try) and any(x is n for x in ast.walk(t)):
-                    guarded = True
-                    break
+            guarded = any(isinstance(t, ast.Try) and any(x is n for x in ast.walk(t))
+                          for t in ast.walk(fn))
             if guarded:
                 continue
-            # 读取目标是否像状态文件
             arg = ast.unparse(n.args[0]) if n.args else ""
+            sev = "medium"
+            tail = "文件损坏会让加载直接抛异常，无降级路径"
+            # v1.4.0 降噪（AF-GAP-120：认实参来源）：json.loads 的实参若不是
+            # **本函数内直接读文件**（read_text/open().read/read_bytes/Path），
+            # 来源可能是 HTTP 响应 / SSE / stdin / LLM 输出 / 调用方传入，
+            # "文件损坏"判词不适用 → 降 info，保留可见性、不派单。
+            if hit == "json.loads" and not _arg_is_file_read(arg):
+                sev = "info"
+                tail = ("实参来源非本函数文件读（可能 HTTP 响应/SSE/stdin/LLM 输出"
+                        "或调用方传入），'文件损坏'判词待人工确认")
             out.append({
                 "rule": "AFS-04-unguarded-load",
-                "severity": "medium",
+                "severity": sev,
                 "file": rel, "line": n.lineno, "function": fn.name,
-                "message": (f"{fn.name}() 中 {hit}({arg[:60]}) 未包裹异常处理；"
-                            f"文件损坏会让加载直接抛异常，无降级路径"),
+                "message": (f"{fn.name}() 中 {hit}({arg[:60]}) 未包裹异常处理；{tail}"),
             })
     return out
 
