@@ -31,6 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 CORE = ROOT / "core"
 ENGINE = ROOT / "engine"
+ECHO = CORE / "echo"
 CONFIG = ROOT / "config"
 # 环境变量覆盖：容器内 /workspace 只读时，设 AUDITKIT_PROJECTS_DIR=/audit-out/projects
 # 让 round 产物写到可写卷（开发规范 §1：NAS 是运行环境，产物落可写区）
@@ -527,6 +528,28 @@ def cmd_reconcile(args) -> int:
     return p.returncode
 
 
+def cmd_echo(args) -> int:
+    """Echo：跨过程「沉默链」检测。
+
+    判据不是"这个 except 里有没有 logger"（那是 rules/generic 下
+    py.silent_except_no_trace / py.print_trace_not_logger 的面），而是：
+    **失败信号沿调用图往上传播，最后有没有变成任何一个可观测决策**。
+    没有 → 断链。与单文件规则正交，故独立成子命令而非一条 L3 规则。
+    """
+    cmd = [sys.executable, str(ECHO / "echo_scan.py")]
+    if args.selftest:
+        cmd.append("--selftest")
+    else:
+        cmd.append(args.path or ".")
+        if args.out:
+            cmd.append(args.out)
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    print(p.stdout)
+    if p.stderr:
+        print(p.stderr, file=sys.stderr)
+    return p.returncode
+
+
 def cmd_round_all(args) -> int:
     """批量并行扫描多个项目。
 
@@ -629,6 +652,13 @@ def main() -> int:
     p6.add_argument("name_or_path")
     p6.add_argument("--path")
     p6.set_defaults(func=cmd_pack)
+
+    pe = sub.add_parser("echo", help="Echo：跨过程沉默链检测（失败信号是否转化为可观测）")
+    pe.add_argument("path", nargs="?", help="项目源码根（默认 .）")
+    pe.add_argument("--out", help="输出 JSON 路径")
+    pe.add_argument("--selftest", action="store_true",
+                    help="跑已知阳性自检（dirty 必须命中 / clean 必须不命中）")
+    pe.set_defaults(func=cmd_echo)
 
     p7 = sub.add_parser("rules", help="规则层：列出/自测 L3 规则（Phase 1 新增）")
     p7sub = p7.add_subparsers(dest="rules_cmd", required=True)
