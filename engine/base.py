@@ -75,6 +75,10 @@ class Finding:
     title: str
     detail: str
     evidence: str = ""
+    # C：可达性 hint（MA-GAP-027/028）。非空 = 该报点落在"未引用定义"内，
+    # 疑死代码噪声。**只标记、不自动降 severity**——可达性判据易误判
+    # （MA-GAP-028：漏模块级入口把可达函数误判死代码），假阴性比假阳性危险。
+    dead_code_hint: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)

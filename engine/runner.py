@@ -40,6 +40,7 @@ def finding_to_legacy_dict(f: Finding) -> dict:
         "title": f.title,
         "message": f.detail,
         "snippet": f.evidence,
+        "dead_code_hint": getattr(f, "dead_code_hint", ""),
     }
 
 
@@ -195,6 +196,33 @@ def run_round(repo_path: Path, outdir: Path, profile_path: Path | None = None,
     for fs in legacy_by_analyzer.values():
         all_findings += fs
     all_findings += gt_findings
+
+    # 6.5) 可达性 hint（MA-GAP-027/028）：标记落在"未引用定义"内的报点。
+    # **不自动降 severity**——可达性判据易误判（假阴性比假阳性危险），只加
+    # 可见标记，由 triage/报告按 dead_code_hint 过滤。判据见
+    # helpers.unreferenced_def_ranges（保守：字符串/__all__/动态注册均豁免）。
+    try:
+        from .helpers import unreferenced_def_ranges
+        dead = unreferenced_def_ranges(repo_path)
+        if dead:
+            _dr = {}
+            for rel, name, s, e in dead:
+                _dr.setdefault(rel, []).append((s, e, name))
+            for f in all_findings:
+                fk = str(f.file).replace("\\", "/")
+                for rel, ranges in _dr.items():
+                    if not fk.endswith(rel):
+                        continue
+                    for s, e, name in ranges:
+                        if s <= f.line <= e:
+                            f.dead_code_hint = (
+                                f"位于未引用定义 {name}()（MA-GAP-027 疑死代码噪声；"
+                                f"降权前人工核可达性——动态注册/字符串引用不计）")
+                            break
+                    if f.dead_code_hint:
+                        break
+    except Exception:
+        pass
 
     # 7) 按分析器/规则分组写 JSON（与 registry.py 输出格式完全兼容）
     for analyzer, findings in legacy_by_analyzer.items():

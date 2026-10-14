@@ -240,3 +240,49 @@ def iter_funcs(files):
         for fn in ast.walk(tree):
             if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 yield path, fn, full_unparse(fn)
+
+
+# ── 9. 可达性 hint（MA-GAP-027/028）────────────────────────────────────
+
+def unreferenced_def_ranges(repo_root, exclude=("__pycache__", ".git", "node_modules")):
+    """简化 DEAD-03：模块级函数/类，其名字在全仓源码中**仅出现在定义处**
+    （无其它引用）→ 疑死代码。返回 [(rel_file, name, start_line, end_line)]。
+
+    保守判据（MA-GAP-028：可达性易误判——漏模块级入口 / 动态注册会把可达函数
+    误判死代码）：用**全仓文本词边界计数**，只要名字在别处出现过（含字符串 /
+    __all__ / 动态注册表 / 测试）即不算死。**宁可漏判死，不误判活**——
+    误判活会把真缺陷报点降权（假阴性，比假阳性危险）。故只作 hint 标记，
+    不自动降 severity（见 engine/runner.run_round 的 6.5 步与 PITFALLS）。
+    """
+    root = pathlib.Path(repo_root)
+    files, texts = [], {}
+    for p in sorted(root.rglob("*.py")):
+        if any(x in str(p) for x in exclude):
+            continue
+        try:
+            t = p.read_text(encoding="utf-8-sig", errors="ignore")
+        except OSError:
+            continue
+        files.append(p)
+        texts[str(p)] = t
+    all_text = "\n".join(texts.values())
+    out = []
+    for p in files:
+        try:
+            tree = ast.parse(texts[str(p)])
+        except Exception:
+            continue
+        try:
+            rel = str(p.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            rel = p.name
+        for node in tree.body:                      # 仅模块级定义
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                name = node.name
+                if name.startswith("__") and name.endswith("__"):
+                    continue                        # dunder（__main__ 等）不判
+                cnt = len(re.findall(r"\b" + re.escape(name) + r"\b", all_text))
+                if cnt <= 1:                        # 仅定义处一次 → 疑死
+                    end = int(getattr(node, "end_lineno", node.lineno) or node.lineno)
+                    out.append((rel, name, int(node.lineno), end))
+    return out
