@@ -4,6 +4,10 @@
     全仓量化 243 处 print 留痕（库模块 227、CLI/脚本 16 合理不计）。典型 MA75：
     相隔 4 行，unicode61 分支已 logger.error，全失败分支仍 print。
 
+量化背书（doubao-butler 第五期 GDAL-BUG-020，2026-10-15）：盲抽池判据把所有 except
+    一律标"静默"，892 个站点里 46.4% 实际有 logger/print 留痕——"只认有无 except、
+    不认留痕通道质量"的粗糙判据假阳性近半。本条判"print 弱留痕"正是对该量化的回应。
+
 与 py.silent_except_no_trace 的分工：
     那条判"四叉留痕均无"（logger/print/warn/raise/计数/记账 都算留痕）；
     本条判**留痕通道质量**——handler 用了 print 但没用 logger/warn。
